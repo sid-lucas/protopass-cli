@@ -3,3 +3,5 @@ pycryptodome
 pyotp
 argparse
 requests
+flask
+pysrp
