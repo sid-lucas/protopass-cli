@@ -1,28 +1,11 @@
 from flask import Flask, request, jsonify
 from server.user_store import add_user, get_user
+from server.session_store import create_session, revoke_session, is_valid, get_session
 import base64, srp
 import os, time
-import json
-from pathlib import Path
-
-SESSIONS_PATH = Path(__file__).resolve().parent / "server_data" / "sessions.json"
-
-def _load_sessions():
-    SESSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not SESSIONS_PATH.exists():
-        SESSIONS_PATH.write_text("{}")
-    try:
-        return json.loads(SESSIONS_PATH.read_text())
-    except Exception:
-        return {}
-
-def _save_sessions(sessions):
-    SESSIONS_PATH.write_text(json.dumps(sessions, indent=2))
 
 
 app = Flask(__name__)
-# Rechargement des sessions en mémoire après reboot
-app.config["SESSIONS"] = _load_sessions()
 
 
 @app.post("/register")
@@ -33,8 +16,10 @@ def register():
             data["username"], data["salt"], data["vkey"],
             data["public_key"], data["private_key_enc"], data["nonce"], data["tag"]
         )
+    except KeyError as e:
+        return jsonify({"Error": str(e)}), 400 #données manquantes -> Bad Request
     except ValueError as e:
-        return jsonify({"Error": str(e)}), 400
+        return jsonify({"Error": str(e)}), 409 #utilisateur existe déjà -> Conflit
 
     print(f"[SERVER] Registered new user '{data['username']}'.")
     return jsonify({"status": "ok", "username": data['username']}), 201
@@ -87,6 +72,8 @@ def srp_start():
         "B": base64.b64encode(B).decode()
     }), 200
 
+
+
 @app.post("/srp/verify")
 def srp_verify():
     # serveur recoit le challenge complété par le client
@@ -109,28 +96,13 @@ def srp_verify():
     # sinon : authentification réussie
     print("[SERVER] SRP authentification successfull")
     
-    
-    # Génère un identifiant de session sécurisé
-    session_id = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    # Authentification SRP réussie -> création d'une session côté serveur
     username = app.config.get("CURRENT_USER", "unknown")
-
-
-    # Initialise le stockage des sessions si nécessaire
-    if "SESSIONS" not in app.config:
-        app.config["SESSIONS"] = {}
-
-    # Stocke la session en mémoire avec expiration (1 heure ici)
-    app.config["SESSIONS"][session_id] = {
-        "username": username,
-        "created": time.time(),
-        "expires": time.time() + 3600
-    }
-    # Stocke la session dans sa database
-    _save_sessions(app.config["SESSIONS"])
+    session_id = create_session(username, ttl_seconds=3600)
 
     print(f"[SERVER] New session for '{username}' ({session_id[:10]}...)")
 
-    #donne au client HAMK et session_id
+    # donne au client la preuve et token de session
     return jsonify({
         "HAMK": base64.b64encode(HAMK).decode(),
         "session_id": session_id
@@ -144,26 +116,19 @@ def verify_session():
     data = request.get_json(force=True)
     token = data.get("session_id")
 
-    # vérifie la validité de la session que le client a fourni
-    sessions = app.config.get("SESSIONS", {})
-    session_data = sessions.get(token)
-
-    # invalide si token absent ou expiré
-    if not session_data or time.time() > session_data["expires"]:
+    if not token:
         return jsonify({"valid": False}), 401
 
-    # Nettoyage automatique de toutes les session expirées
-    expired_tokens = [sid for sid, s in sessions.items() if time.time() > s["expires"]]
-    for sid in expired_tokens:
-        del sessions[sid]
-    if expired_tokens:
-        _save_sessions(sessions)
+    # vérifie via le store central
+    if not is_valid(token):
+        return jsonify({"valid": False}), 401
 
-
+    s = get_session(token)
     return jsonify({
         "valid": True,
-        "username": session_data["username"]
+        "username": s["username"]
     }), 200
+
 
 
 @app.post("/session/logout")

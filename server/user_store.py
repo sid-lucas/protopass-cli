@@ -29,13 +29,14 @@ def add_user(username: str, salt_b64: str, vkey_b64: str,
 
     # Vérif : champs obligatoires
     if not all([username, salt_b64, vkey_b64, public_key, private_key_enc, nonce, tag]):
-        raise ValueError("missing required fields")
+        raise KeyError("missing required fields")
+
+    # charge la DB
+    data = _load()
 
     # Vérif : user déjà existant
     if username in data:
         raise ValueError("username already exists")
-
-    data = _load()
 
     data[username] = {
         "salt": salt_b64,

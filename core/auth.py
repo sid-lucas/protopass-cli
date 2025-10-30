@@ -48,15 +48,15 @@ def register_account(args):
     public_user_key = key.publickey().export_key(format='DER')
     # Chiffrement de la clé privée user key avec la clé dérivée bcrypt
     cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-    ciphertext, tag = cipher.encrypt_and_digest(private_bytes)
+    private_user_key_enc, tag = cipher.encrypt_and_digest(private_user_key)
 
     # Préparation du JSON
     payload = {
         "username": username,
         "salt": salt_b64,
         "vkey": vkey_b64,
-        "public_key": base64.b64encode(public_bytes).decode(),
-        "private_key_enc": base64.b64encode(ciphertext).decode(),
+        "public_key": base64.b64encode(public_user_key).decode(),
+        "private_key_enc": base64.b64encode(private_user_key_enc).decode(),
         "nonce": base64.b64encode(nonce).decode(),
         "tag": base64.b64encode(tag).decode()
     }
