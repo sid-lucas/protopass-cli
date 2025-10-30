@@ -28,20 +28,17 @@ app.config["SESSIONS"] = _load_sessions()
 @app.post("/register")
 def register():
     data = request.get_json(force=True)
-    username = data.get("username")
-    salt = data.get("salt")
-    vkey = data.get("vkey")
+    try:
+        add_user(
+            data["username"], data["salt"], data["vkey"],
+            data["public_key"], data["private_key_enc"], data["nonce"], data["tag"]
+        )
+    except ValueError as e:
+        return jsonify({"Error": str(e)}), 400
 
-    # validation
-    if not all([username, salt, vkey]):
-        return jsonify({"error": "missing fields"}), 400
-    if get_user(username):
-        return jsonify({"error": "username is already taken"}), 409
+    print(f"[SERVER] Registered new user '{data['username']}'.")
+    return jsonify({"status": "ok", "username": data['username']}), 201
 
-    # enregistrement du sel et vkey sous le nouveau username
-    add_user(username, salt, vkey)
-    print(f"[SERVER] Registered new user '{username}'")
-    return jsonify({"status": "ok", "username": username}), 201
 
 
 
@@ -53,11 +50,11 @@ def srp_start():
     A_b64 = data.get("A")
 
     if not username or not A_b64:
-        return jsonify({"error": "missing username or A"}), 400
+        return jsonify({"Error": "missing username or A"}), 400
 
     user = get_user(username)
     if not user:
-        return jsonify({"error": "unknown user"}), 404
+        return jsonify({"Error": "unknown user"}), 404
 
     # Decode valeurs depuis base64
     A = base64.b64decode(A_b64)
@@ -77,7 +74,7 @@ def srp_start():
     # serveur calcul sa clé publique (B)
     s_B, B = v.get_challenge()
     if s_B is None or B is None:
-        return jsonify({"error": "invalid SRP A value"}), 400
+        return jsonify({"Error": "invalid SRP A value"}), 400
 
     # Stocke l’objet Verifier pour la suite, et username pour la gestion de session
     app.config["SRP_SESSION"] = v
@@ -98,16 +95,16 @@ def srp_verify():
 
     v = app.config.get("SRP_SESSION")
     if not v:
-        return jsonify({"error": "no active SRP session"}), 400
+        return jsonify({"Error": "no active SRP session"}), 400
 
     if not M_b64:
-        return jsonify({"error": "missing M"}), 400
+        return jsonify({"Error": "missing M"}), 400
 
     M = base64.b64decode(M_b64)
 
     HAMK = v.verify_session(M)
     if HAMK is None:
-        return jsonify({"error": "bad proof"}), 403
+        return jsonify({"Error": "bad proof"}), 403
 
     # sinon : authentification réussie
     print("[SERVER] SRP authentification successfull")
@@ -180,7 +177,7 @@ def logout_session():
         print(f"[SERVER] Session {token[:10]}... deleted")
         return jsonify({"status": "logged_out"}), 200
 
-    return jsonify({"error": "invalid session"}), 400
+    return jsonify({"Error": "invalid session"}), 400
 
 
 

@@ -23,11 +23,30 @@ def get_user(username: str):
     data = _load()
     return data.get(username)
 
-# crée un nouveau user (si le nom n'existe pas deja)
-def add_user(username: str, salt_b64: str, vkey_b64: str):
-    data = _load()
+# crée un nouveau user complet (SRP + user_key obligatoires)
+def add_user(username: str, salt_b64: str, vkey_b64: str,
+             public_key: str, private_key_enc: str, nonce: str, tag: str):
+
+    # Vérif : champs obligatoires
+    if not all([username, salt_b64, vkey_b64, public_key, private_key_enc, nonce, tag]):
+        raise ValueError("missing required fields")
+
+    # Vérif : user déjà existant
     if username in data:
-        return False
-    data[username] = {"salt": salt_b64, "vkey": vkey_b64}
+        raise ValueError("username already exists")
+
+    data = _load()
+
+    data[username] = {
+        "salt": salt_b64,
+        "vkey": vkey_b64,
+        "user_key": {
+            "public_key": public_key,
+            "private_key_enc": private_key_enc,
+            "nonce": nonce,
+            "tag": tag,
+        }
+    }
+
     _save(data)
     return True
