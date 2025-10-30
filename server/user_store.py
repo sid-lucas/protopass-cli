@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parents[1] / "data" / "users.json"
+DB_PATH = Path(__file__).resolve().parent / "server_data" / "users.json"
 
 def _ensure_db():
     # crée data/users.json si absent

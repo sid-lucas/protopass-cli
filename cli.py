@@ -17,13 +17,18 @@ def main():
     p_init = subparsers.add_parser("init", help="test init")
     p_init.set_defaults(func=auth.init_vault)
 
+    p_register = subparsers.add_parser("register", help="Register a new account")
+    p_register.add_argument("--username", required=True, help="Username of the account")
+    p_register.set_defaults(func=auth.register_account)
+
     p_login = subparsers.add_parser("login", help="Log to account")
     p_login.add_argument("--username", required=True, help="Username of the account")
     p_login.set_defaults(func=auth.login_account)
 
-    p_register = subparsers.add_parser("register", help="Register a new account")
-    p_register.add_argument("--username", required=True, help="Username of the account")
-    p_register.set_defaults(func=auth.register_account)
+    p_logout = subparsers.add_parser("logout", help="Logout from current session")
+    p_logout.set_defaults(func=auth.logout_account)
+
+
 
     # Lit ce que l'user passe comme arguments (après 'python cli.py')
     args = parser.parse_args()

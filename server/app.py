@@ -104,7 +104,7 @@ def srp_verify():
     if "SESSIONS" not in app.config:
         app.config["SESSIONS"] = {}
 
-    # Stocke la session avec expiration (1 heure ici)
+    # Stocke la session en mémoire avec expiration (1 heure ici)
     app.config["SESSIONS"][session_id] = {
         "username": username,
         "created": time.time(),
@@ -126,6 +126,7 @@ def verify_session():
     data = request.get_json(force=True)
     token = data.get("session_id")
 
+    # vérifie la validité de la session que le client a fourni
     sessions = app.config.get("SESSIONS", {})
     session_data = sessions.get(token)
 
@@ -137,6 +138,20 @@ def verify_session():
         "valid": True,
         "username": session_data["username"]
     }), 200
+
+
+@app.post("/session/logout")
+def logout_session():
+    data = request.get_json(force=True)
+    token = data.get("session_id")
+
+    sessions = app.config.get("SESSIONS", {})
+    if token in sessions:
+        del sessions[token]
+        print(f"[SERVER] Session {token[:10]}... deleted")
+        return jsonify({"status": "logged_out"}), 200
+
+    return jsonify({"error": "invalid session"}), 400
 
 
 if __name__ == "__main__":

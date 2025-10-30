@@ -5,7 +5,7 @@ import requests
 import json
 from pathlib import Path
 
-SESSION_FILE = Path(__file__).resolve().parents[1] / "data" / "session.json"
+SESSION_FILE = Path(__file__).resolve().parents[1] / "client_data" / "session.json"
 
 
 def init_vault(_args):
@@ -41,7 +41,7 @@ def register_account(args):
     try:
         resp = requests.post(url, json=payload)
     except requests.exceptions.ConnectionError:
-        print("Error: cannot connect to the server")
+        print("Error: server unreachable")
         return
 
     # 6. réception du code retour
@@ -76,7 +76,7 @@ def login_account(args):
     try:
         resp = requests.post(url, json=payload)
     except requests.exceptions.ConnectionError:
-        print("Error: cannot connect to the server")
+        print("Error: server unreachable")
         return
 
     if resp.status_code != 200:
@@ -111,6 +111,30 @@ def login_account(args):
         print(f"Login successful, welcome {username}.")
     else:
         print("Error: incorrect username or password")
+
+
+def logout_account(_args):
+    session_id = load_session()
+    if not session_id:
+        print("No active session found.")
+        return
+
+    url = "http://127.0.0.1:5000/session/logout"
+    try:
+        resp = requests.post(url, json={"session_id": session_id})
+    except requests.exceptions.ConnectionError:
+        print("Error: server unreachable")
+        return
+
+    if resp.status_code == 200:
+        # Supprime le fichier local de session
+        if SESSION_FILE.exists():
+            SESSION_FILE.unlink()
+        print("Logout successful. Session terminated.")
+    else:
+        print(f"Error: {resp.text}")
+
+
 
 
 
