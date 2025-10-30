@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify
 from server.user_store import add_user, get_user
-
+import base64, srp
 
 app = Flask(__name__)
+
 
 @app.post("/register")
 def register():
@@ -17,10 +18,82 @@ def register():
     if get_user(username):
         return jsonify({"error": "username is already taken"}), 409
 
-    # enregistrement du sel et verifier sous le nouveau username
+    # enregistrement du sel et vkey sous le nouveau username
     add_user(username, salt, vkey)
     print(f"[SERVER] Registered new user '{username}'")
     return jsonify({"status": "ok", "username": username}), 201
 
+
+
+@app.post("/srp/start")
+def srp_start():
+    # serveur recoit username et clé publique du client (A)
+    data = request.get_json(force=True)
+    username = data.get("username")
+    A_b64 = data.get("A")
+
+    if not username or not A_b64:
+        return jsonify({"error": "missing username or A"}), 400
+
+    user = get_user(username)
+    if not user:
+        return jsonify({"error": "unknown user"}), 404
+
+    # Decode valeurs depuis base64
+    A = base64.b64decode(A_b64)
+    salt = base64.b64decode(user["salt"])
+    vkey = base64.b64decode(user["vkey"])
+
+    # Création de l’objet SRP côté serveur
+    v = srp.Verifier(
+        username.encode(),
+        salt,
+        vkey,
+        A,
+        hash_alg=srp.SHA256,
+        ng_type=srp.NG_2048
+    )
+
+    # serveur calcul sa clé publique (B)
+    s_B, B = v.get_challenge()
+    if s_B is None or B is None:
+        return jsonify({"error": "invalid SRP A value"}), 400
+
+    # Stocke l’objet Verifier pour la suite (à gérer plus tard)
+    app.config["SRP_SESSION"] = v
+
+    # envoie au client le sel et la clé publique server (B)
+    return jsonify({
+        "salt": user["salt"],
+        "B": base64.b64encode(B).decode()
+    }), 200
+
+@app.post("/srp/verify")
+def srp_verify():
+    # serveur recoit le challenge complété par le client
+    data = request.get_json(force=True)
+    M_b64 = data.get("M")
+
+    v = app.config.get("SRP_SESSION")
+    if not v:
+        return jsonify({"error": "no active SRP session"}), 400
+
+    if not M_b64:
+        return jsonify({"error": "missing M"}), 400
+
+    M = base64.b64decode(M_b64)
+
+    HAMK = v.verify_session(M)
+    if HAMK is None:
+        return jsonify({"error": "bad proof"}), 403
+
+    # sinon : authentification réussie
+    print("[SERVER] SRP authentification successfull")
+    return jsonify({"HAMK": base64.b64encode(HAMK).decode()}), 200
+
+
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
+

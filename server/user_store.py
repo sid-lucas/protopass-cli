@@ -28,6 +28,6 @@ def add_user(username: str, salt_b64: str, vkey_b64: str):
     data = _load()
     if username in data:
         return False
-    data[username] = {"salt": salt_b64, "verifier": vkey_b64}
+    data[username] = {"salt": salt_b64, "vkey": vkey_b64}
     _save(data)
     return True
