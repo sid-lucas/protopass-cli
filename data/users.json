@@ -1,0 +1,6 @@
+{
+  "bob": {
+    "salt": "salt123",
+    "verifier": "verif123"
+  }
+}
