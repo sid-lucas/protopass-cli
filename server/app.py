@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 from server.user_store import add_user, get_user
 import base64, srp
+import os, time
+
 
 app = Flask(__name__)
 
@@ -59,8 +61,10 @@ def srp_start():
     if s_B is None or B is None:
         return jsonify({"error": "invalid SRP A value"}), 400
 
-    # Stocke l’objet Verifier pour la suite (à gérer plus tard)
+    # Stocke l’objet Verifier pour la suite, et username pour la gestion de session
     app.config["SRP_SESSION"] = v
+    app.config["CURRENT_USER"] = username
+
 
     # envoie au client le sel et la clé publique server (B)
     return jsonify({
@@ -89,9 +93,50 @@ def srp_verify():
 
     # sinon : authentification réussie
     print("[SERVER] SRP authentification successfull")
-    return jsonify({"HAMK": base64.b64encode(HAMK).decode()}), 200
+    
+    
+    # Génère un identifiant de session sécurisé
+    session_id = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    username = app.config.get("CURRENT_USER", "unknown")
 
 
+    # Initialise le stockage des sessions si nécessaire
+    if "SESSIONS" not in app.config:
+        app.config["SESSIONS"] = {}
+
+    # Stocke la session avec expiration (1 heure ici)
+    app.config["SESSIONS"][session_id] = {
+        "username": username,
+        "created": time.time(),
+        "expires": time.time() + 3600
+    }
+    print(f"[SERVER] New session for '{username}' ({session_id[:10]}...)")
+
+    #donne au client HAMK et session_id
+    return jsonify({
+        "HAMK": base64.b64encode(HAMK).decode(),
+        "session_id": session_id
+    }), 200
+
+
+# avant d'exec une commande, le cli contacte le serveur pour vérifier que le session_id est ok
+# vérifie la présence et la validité temporelle du session_id
+@app.post("/session/verify")
+def verify_session():
+    data = request.get_json(force=True)
+    token = data.get("session_id")
+
+    sessions = app.config.get("SESSIONS", {})
+    session_data = sessions.get(token)
+
+    # invalide si token absent ou expiré
+    if not session_data or time.time() > session_data["expires"]:
+        return jsonify({"valid": False}), 401
+
+    return jsonify({
+        "valid": True,
+        "username": session_data["username"]
+    }), 200
 
 
 if __name__ == "__main__":

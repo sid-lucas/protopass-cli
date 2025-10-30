@@ -2,6 +2,10 @@ import getpass
 import srp
 import hashlib, base64
 import requests
+import json
+from pathlib import Path
+
+SESSION_FILE = Path(__file__).resolve().parents[1] / "data" / "session.json"
 
 
 def init_vault(_args):
@@ -100,9 +104,41 @@ def login_account(args):
     HAMK = base64.b64decode(data["HAMK"])
 
     # Validation finale
+    session_id = data.get("session_id")
     usr.verify_session(HAMK)
-    if usr.authenticated():
+    if usr.authenticated() and session_id:
+        save_session(username, session_id)
         print(f"Login successful, welcome {username}.")
     else:
         print("Error: incorrect username or password")
 
+
+
+def save_session(username, session_id):
+    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SESSION_FILE.write_text(json.dumps({
+        "username": username,
+        "session_id": session_id
+    }, indent=2))
+
+def load_session():
+    if not SESSION_FILE.exists():
+        return None
+    try:
+        data = json.loads(SESSION_FILE.read_text())
+        return data.get("session_id")
+    except Exception:
+        return None
+
+def is_session_valid():
+    session_id = load_session()
+    if not session_id:
+        return False
+
+    try:
+        resp = requests.post("http://127.0.0.1:5000/session/verify", json={"session_id": session_id})
+        if resp.status_code != 200:
+            return False
+        return resp.json().get("valid", False)
+    except requests.exceptions.ConnectionError:
+        return False

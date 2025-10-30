@@ -1,5 +1,7 @@
 import argparse
 from core import auth
+from core.auth import is_session_valid
+
 
 def main():
     # Création parseur de commandes
@@ -30,7 +32,14 @@ def main():
         parser.print_help()
         return
 
-    # appelle la fonction associée à la sous-commande
+    # Vérifie la session avant d'exécuter une commande
+    restricted = ["login", "register"]
+    if args.command not in restricted and not is_session_valid():
+        print("You must be logged in to use this command.")
+        print("Please run: python cli.py login --username <your_name>") #TODO CHANGE TEXT?
+        return
+
+    # Exécution de la commande demandée
     args.func(args)
 
 
