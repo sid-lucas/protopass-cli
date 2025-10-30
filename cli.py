@@ -19,6 +19,10 @@ def main():
     p_login.add_argument("--username", required=True, help="Username of the account")
     p_login.set_defaults(func=auth.login_account)
 
+    p_register = subparsers.add_parser("register", help="Register a new account")
+    p_register.add_argument("--username", required=True, help="Username of the account")
+    p_register.set_defaults(func=auth.register_account)
+
     # Lit ce que l'user passe comme arguments (après 'python cli.py')
     args = parser.parse_args()
 

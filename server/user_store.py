@@ -24,10 +24,10 @@ def get_user(username: str):
     return data.get(username)
 
 # crée un nouveau user (si le nom n'existe pas deja)
-def add_user(username: str, salt_b64: str, verifier_b64: str):
+def add_user(username: str, salt_b64: str, vkey_b64: str):
     data = _load()
     if username in data:
         return False
-    data[username] = {"salt": salt_b64, "verifier": verifier_b64}
+    data[username] = {"salt": salt_b64, "verifier": vkey_b64}
     _save(data)
     return True
