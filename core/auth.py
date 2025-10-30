@@ -16,6 +16,12 @@ def init_vault(_args):
     print("salut a tous")
 
 def register_account(args):
+    # vérifie qu'on est pas déjà connecté
+    session_id = load_session()
+    if session_id and is_session_valid():
+        print("You are already logged in. Please logout before creating a new account.")
+        return
+
     username = args.username
     print(f"Creation of a new account '{username}'")
 
@@ -77,6 +83,12 @@ def register_account(args):
 
 
 def login_account(args):
+    # Vérifie si une session locale est déjà active
+    session_id = load_session()
+    if session_id and is_session_valid():
+        print("You are already logged in. Please logout first.")
+        return
+
     username = args.username
     password = getpass.getpass(f"Enter your password of '{username}': ")
 
