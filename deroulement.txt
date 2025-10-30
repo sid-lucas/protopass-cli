@@ -26,3 +26,4 @@ source .venv/bin/activate
 
 # Installation des dépendances dans l’environnement virtuel
 pip install -r requirements.txt
+
