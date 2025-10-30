@@ -4,6 +4,10 @@ import hashlib, base64
 import requests
 import json
 from pathlib import Path
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+import bcrypt
 
 SESSION_FILE = Path(__file__).resolve().parents[1] / "client_data" / "session.json"
 
@@ -15,28 +19,49 @@ def register_account(args):
     username = args.username
     print(f"Creation of a new account '{username}'")
 
-    # 1. Demande du mot de passe
+    # Demande du mot de passe
     password = getpass.getpass("Enter your password: ")
 
-    # 2. Générer (salt + verifier) selon SRP
+    # Générer (salt + verifier) selon SRP
     salt, vkey = srp.create_salted_verification_key(
         username, password,
         hash_alg=srp.SHA256,
         ng_type=srp.NG_2048
     )
-
-    # 3. Encode en b64
+    # Encode en b64
     salt_b64 = base64.b64encode(salt).decode()
     vkey_b64 = base64.b64encode(vkey).decode()
 
-    # 4. Préparation du JSON
+    # Dériver une clé symétrique via bcrypt en prenant le password et le sel du compte
+    aes_key = bcrypt.kdf(
+        password=password.encode(),
+        salt=salt,
+        desired_key_bytes=32,
+        rounds=12  # facteur de coût
+    )
+    nonce = get_random_bytes(12)
+
+    # Génération de la paire de clé RSA (2048 bits) appelée 'user key'
+    # Ces clés seront stockée sur le serveur afin de permettre le multiplateforme
+    key = RSA.generate(2048)
+    private_user_key = key.export_key(format='DER')
+    public_user_key = key.publickey().export_key(format='DER')
+    # Chiffrement de la clé privée user key avec la clé dérivée bcrypt
+    cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
+    ciphertext, tag = cipher.encrypt_and_digest(private_bytes)
+
+    # Préparation du JSON
     payload = {
         "username": username,
         "salt": salt_b64,
         "vkey": vkey_b64,
+        "public_key": base64.b64encode(public_bytes).decode(),
+        "private_key_enc": base64.b64encode(ciphertext).decode(),
+        "nonce": base64.b64encode(nonce).decode(),
+        "tag": base64.b64encode(tag).decode()
     }
 
-    # 5. envoi au serveur sur la route /register
+    # envoi au serveur sur la route /register
     url = "http://127.0.0.1:5000/register"
     try:
         resp = requests.post(url, json=payload)
@@ -44,7 +69,7 @@ def register_account(args):
         print("Error: server unreachable")
         return
 
-    # 6. réception du code retour
+    # réception du code retour
     if resp.status_code != 201:
         print(f"Error: servor responded ({resp.status_code}) : {resp.text}")
     
