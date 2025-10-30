@@ -136,13 +136,16 @@ def logout_session():
     data = request.get_json(force=True)
     token = data.get("session_id")
 
-    sessions = app.config.get("SESSIONS", {})
-    if token in sessions:
-        del sessions[token]
-        print(f"[SERVER] Session {token[:10]}... deleted")
-        return jsonify({"status": "logged_out"}), 200
+    if not token:
+        return jsonify({"Error": "missing session_id"}), 400
 
-    return jsonify({"Error": "invalid session"}), 400
+    ok = revoke_session(token)
+    if ok:
+        print(f"[SERVER] Session {token[:10]}... revoked")
+        return ("", 204)
+    else:
+        return jsonify({"status": "already logged out"}), 200
+
 
 
 

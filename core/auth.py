@@ -151,7 +151,7 @@ def logout_account(_args):
         print("Error: server unreachable")
         return
 
-    if resp.status_code == 200:
+    if resp.status_code == 204:
         # Supprime le fichier local de session
         if SESSION_FILE.exists():
             SESSION_FILE.unlink()
