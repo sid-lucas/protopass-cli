@@ -2,9 +2,27 @@ from flask import Flask, request, jsonify
 from server.user_store import add_user, get_user
 import base64, srp
 import os, time
+import json
+from pathlib import Path
+
+SESSIONS_PATH = Path(__file__).resolve().parent / "server_data" / "sessions.json"
+
+def _load_sessions():
+    SESSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not SESSIONS_PATH.exists():
+        SESSIONS_PATH.write_text("{}")
+    try:
+        return json.loads(SESSIONS_PATH.read_text())
+    except Exception:
+        return {}
+
+def _save_sessions(sessions):
+    SESSIONS_PATH.write_text(json.dumps(sessions, indent=2))
 
 
 app = Flask(__name__)
+# Rechargement des sessions en mémoire après reboot
+app.config["SESSIONS"] = _load_sessions()
 
 
 @app.post("/register")
@@ -110,6 +128,9 @@ def srp_verify():
         "created": time.time(),
         "expires": time.time() + 3600
     }
+    # Stocke la session dans sa database
+    _save_sessions(app.config["SESSIONS"])
+
     print(f"[SERVER] New session for '{username}' ({session_id[:10]}...)")
 
     #donne au client HAMK et session_id
@@ -134,6 +155,14 @@ def verify_session():
     if not session_data or time.time() > session_data["expires"]:
         return jsonify({"valid": False}), 401
 
+    # Nettoyage automatique de toutes les session expirées
+    expired_tokens = [sid for sid, s in sessions.items() if time.time() > s["expires"]]
+    for sid in expired_tokens:
+        del sessions[sid]
+    if expired_tokens:
+        _save_sessions(sessions)
+
+
     return jsonify({
         "valid": True,
         "username": session_data["username"]
@@ -154,6 +183,17 @@ def logout_session():
     return jsonify({"error": "invalid session"}), 400
 
 
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
+
+
+
 
