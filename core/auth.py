@@ -16,7 +16,7 @@ SERVER_URL = "http://127.0.0.1:5000"
 # Helpers Internes
 # ============================================================
 
-def api_post(endpoint, payload):
+def api_post(endpoint, payload={}):
     """Wrapper commun pour les requêtes POST vers le serveur Flask."""
     try:
         resp = requests.post(f"{SERVER_URL}{endpoint}", json=payload)
@@ -24,7 +24,7 @@ def api_post(endpoint, payload):
         print("Error: server unreachable")
         return None
 
-    if resp.status_code >= 400:
+    if not resp.ok:
         # si JSON dispo, essaie de lire le message d'erreur propre
         try:
             err = resp.json().get("Error", "")
@@ -200,11 +200,47 @@ def login_account(args):
     # Validation finale
     session_id = data.get("session_id")
     usr.verify_session(HAMK)
-    if usr.authenticated() and session_id:
-        Session.save(username, session_id)
-        print(f"Login successful, welcome {username}.")
-    else:
+    if not usr.authenticated() or not session_id:
         print("Error: incorrect username or password")
+        return
+
+    Session.save(username, session_id)
+    print(f"Login successful, welcome {username}.")   
+
+    # Demande au serveur la user key et réceptionne les données
+    resp = api_post("/userkey")
+    if not resp or resp.status_code != 200:
+        return
+
+    data = resp.json()
+    private_key_enc_b64 = data.get("private_key_enc")
+    nonce_b64 = data.get("nonce")
+    tag_b64 = data.get("tag")
+
+    if not all([private_key_enc_b64, nonce_b64, tag_b64]):
+        print("Error: incomplete user key data from server.")
+        return
+
+    private_key_enc = base64.b64decode(private_key_enc_b64)
+    nonce = base64.b64decode(nonce_b64)
+    tag = base64.b64decode(tag_b64)
+
+    try:
+        # Dérive la clé symétrique et déchiffre la clé privée protégée
+        aes_key = bcrypt.kdf(
+            password=password.encode(),
+            salt=salt,
+            desired_key_bytes=32,
+            rounds=12
+        )
+        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
+        private_user_key = cipher.decrypt_and_verify(private_key_enc, tag)
+    except ValueError:
+        print("Error: unable to decrypt user key (invalid password or corrupted data).")
+        return
+
+    
+
 
 def logout_account(_args):
     """Déconnexion de l'utilisateur (révocation de la session côté client et serveur)."""
@@ -219,4 +255,3 @@ def logout_account(_args):
 
     Session.clear()
     print("Logout successful. Session terminated.")
-
