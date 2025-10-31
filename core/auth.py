@@ -24,6 +24,7 @@ def api_post(endpoint, payload={}):
         print("Error: server unreachable")
         return None
 
+    # Gestion des erreurs réseau / HTTP
     if not resp.ok:
         # si JSON dispo, essaie de lire le message d'erreur propre
         try:
@@ -157,7 +158,7 @@ def login_account(args):
     username = args.username
     password = getpass.getpass(f"Enter your password of '{username}': ")
 
-    # Création de l'objet SRP côté clien
+    # Création de l'objet SRP côté client
     usr = srp.User(
         username.encode(),
         password.encode(),
@@ -166,6 +167,7 @@ def login_account(args):
     )
 
     # client calcul sa clé publique (A)
+    # The first return value is unused; '_' is used by convention to indicate this.
     _, A = usr.start_authentication()
 
     payload = {
@@ -188,7 +190,10 @@ def login_account(args):
     M = usr.process_challenge(salt, B)
 
     # Envoi de la preuve au serveur pour vérification
-    payload = {"M": base64.b64encode(M).decode()}
+    payload = {
+        "username": username,
+        "M": base64.b64encode(M).decode()
+    }
     resp = api_post("/srp/verify", payload)
     if not resp:
         return
@@ -205,7 +210,6 @@ def login_account(args):
         return
 
     Session.save(username, session_id)
-    print(f"Login successful, welcome {username}.")   
 
     # Demande au serveur la user key et réceptionne les données
     resp = api_post("/userkey")
@@ -236,9 +240,10 @@ def login_account(args):
         cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
         private_user_key = cipher.decrypt_and_verify(private_key_enc, tag)
     except ValueError:
-        print("Error: unable to decrypt user key (invalid password or corrupted data).")
+        print("Error: unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
         return
 
+    print(f"Login successful, welcome {username}.")
     
 
 
