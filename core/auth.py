@@ -9,7 +9,6 @@ from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 import bcrypt
 
-SESSION_FILE = Path(__file__).resolve().parents[1] / "client_data" / "session.json"
 SERVER_URL = "http://127.0.0.1:5000"
 
 def api_post(endpoint, payload):
@@ -31,14 +30,53 @@ def api_post(endpoint, payload):
     return resp
 
 
+class Session:
+    """Gère la session locale du client (sauvegarde, validation, suppression)."""
+    PATH = Path(__file__).resolve().parents[1] / "client_data" / "session.json"
+
+    @classmethod
+    def save(cls, username, session_id):
+        cls.PATH.parent.mkdir(parents=True, exist_ok=True)
+        cls.PATH.write_text(json.dumps({
+            "username": username,
+            "session_id": session_id
+        }, indent=2))
+
+    @classmethod
+    def load(cls):
+        if not cls.PATH.exists():
+            return None
+        try:
+            data = json.loads(cls.PATH.read_text())
+            return data.get("session_id")
+        except Exception:
+            return None
+
+    @classmethod
+    def clear(cls):
+        if cls.PATH.exists():
+            cls.PATH.unlink()
+
+    @classmethod
+    def valid(cls):
+        """Vérifie si la session locale existe et est encore valide côté serveur."""
+        sid = cls.load()
+        if not sid:
+            return False
+
+        resp = api_post("/session/verify", {"session_id": sid})
+        if not resp:
+            return False
+        return resp.json().get("valid", False)
+
+
 
 def init_vault(_args):
     print("salut a tous")
 
 def register_account(args):
     # vérifie qu'on est pas déjà connecté
-    session_id = load_session()
-    if session_id and is_session_valid():
+    if Session.valid():
         print("You are already logged in. Please logout before creating a new account.")
         return
 
@@ -99,8 +137,7 @@ def register_account(args):
 
 def login_account(args):
     # Vérifie si une session locale est déjà active
-    session_id = load_session()
-    if session_id and is_session_valid():
+    if Session.valid():
         print("You are already logged in. Please logout first.")
         return
 
@@ -151,14 +188,14 @@ def login_account(args):
     session_id = data.get("session_id")
     usr.verify_session(HAMK)
     if usr.authenticated() and session_id:
-        save_session(username, session_id)
+        Session.save(username, session_id)
         print(f"Login successful, welcome {username}.")
     else:
         print("Error: incorrect username or password")
 
 
 def logout_account(_args):
-    session_id = load_session()
+    session_id = Session.load()
     if not session_id:
         print("No active session found.")
         return
@@ -167,34 +204,7 @@ def logout_account(_args):
     if not resp:
         return
 
-    # Supprime le fichier local de session
-    if SESSION_FILE.exists():
-        SESSION_FILE.unlink()
+    Session.clear()
     print("Logout successful. Session terminated.")
 
 
-def save_session(username, session_id):
-    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SESSION_FILE.write_text(json.dumps({
-        "username": username,
-        "session_id": session_id
-    }, indent=2))
-
-def load_session():
-    if not SESSION_FILE.exists():
-        return None
-    try:
-        data = json.loads(SESSION_FILE.read_text())
-        return data.get("session_id")
-    except Exception:
-        return None
-
-def is_session_valid():
-    session_id = load_session()
-    if not session_id:
-        return False
-
-    resp = api_post("/session/verify", {"session_id": session_id})
-    if not resp:
-        return False
-    return resp.json().get("valid", False)
