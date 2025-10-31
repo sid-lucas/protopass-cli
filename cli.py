@@ -1,6 +1,5 @@
 import argparse
 from core import auth
-from core.auth import is_session_valid
 
 
 def main():
@@ -39,7 +38,7 @@ def main():
 
     # Vérifie la session avant d'exécuter une commande
     restricted = ["login", "register"]
-    if args.command not in restricted and not is_session_valid():
+    if args.command not in restricted and not auth.Session.valid():
         print("You must be logged in to use this command.")
         print("Please run: python cli.py login --username <your_name>") #TODO CHANGE TEXT?
         return

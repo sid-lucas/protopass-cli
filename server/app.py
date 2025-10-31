@@ -156,11 +156,9 @@ def logout_session():
 
     if not token:
         return jsonify({"Error": "missing session_id"}), 400
-
-    ok = revoke_session(token)
-    if ok:
+    elif revoke_session(token):
         print(f"[SERVER] Session {token[:10]}... revoked")
-        return ("", 204)
+        return jsonify({"status": "ok"}), 200
     else:
         return jsonify({"status": "already logged out"}), 200
 

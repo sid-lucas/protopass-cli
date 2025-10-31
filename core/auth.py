@@ -148,7 +148,7 @@ def register_account(args):
         password=password.encode(),
         salt=salt,
         desired_key_bytes=32,
-        rounds=12  # facteur de coût
+        rounds=200  # facteur de coût (à partir de 200 pour de la sécurité basique)
     )
 
     # Génération de la paire de clé RSA (2048 bits) appelée 'user key'
@@ -254,7 +254,7 @@ def login_account(args):
 
     # Demande au serveur la user key et réceptionne les données
     data = check_resp(
-        api_post("/userkey"),
+        api_post("/userkey", {"session_id": session_id}),
         required_fields=["private_key_enc", "nonce", "tag"],
         context="Fetch user key"
     )
@@ -275,7 +275,7 @@ def login_account(args):
             password=password.encode(),
             salt=salt,
             desired_key_bytes=32,
-            rounds=12
+            rounds=200  # facteur de coût (à partir de 200 pour de la sécurité basique)
         )
         cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
         private_user_key = cipher.decrypt_and_verify(private_key_enc, tag)
@@ -293,15 +293,26 @@ def logout_account(_args):
         log("info", "Logout", "No active session found.")
         return
 
+    # Appel unique + vérif cohérente via check_resp
     data = check_resp(
         api_post("/session/logout", {"session_id": session_id}),
         required_fields=["status"],
-        context="Logout: revoke session"
+        context="Logout"
     )
-    if not data or data.get("status") != "ok":
-        log("error", "Logout", "Session was already invalid or could not be revoked. Local session not cleared.")
+    if not data: return
+
+    status = data.get("status")
+
+    if status == "ok":
+        Session.clear()
+        log("info", "Logout", "Logout successful. Session terminated.")
         return
 
-    
-    Session.clear()
-    log("info", "Logout", "Logout successful. Session terminated.")
+    if status == "already logged out":
+        Session.clear()
+        log("info", "Logout", "Session already invalid on server. Local session cleared.")
+        return
+
+    # cas non prévu
+    log("error", "Logout", f"Unexpected server response: {status}")
+
