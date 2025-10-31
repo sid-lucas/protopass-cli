@@ -16,12 +16,17 @@ SERVER_URL = "http://127.0.0.1:5000"
 # Helpers Internes
 # ============================================================
 
+def log(level, context, message):
+    """Affiche un message formaté de manière cohérente (prépare les futurs logs)."""
+    print(f"[{level.upper()}] {context}: {message}")
+
+
 def api_post(endpoint, payload={}):
     """Wrapper commun pour les requêtes POST vers le serveur Flask."""
     try:
         resp = requests.post(f"{SERVER_URL}{endpoint}", json=payload)
     except requests.exceptions.ConnectionError:
-        print("Error: server unreachable")
+        log("error", f"API POST {endpoint}", "unable to connect to server")
         return None
 
     # Gestion des erreurs réseau / HTTP
@@ -31,7 +36,7 @@ def api_post(endpoint, payload={}):
             err = resp.json().get("Error", "")
         except Exception:
             err = resp.text
-        print(f"Error ({resp.status_code}): {err}")
+        log("error", f"API POST {endpoint}", f"HTTP {resp.status_code} - {err}")
         return None
     return resp
 
@@ -44,21 +49,21 @@ def check_resp(resp, required_fields=None, context="Server response"):
     Retourne le JSON décodé si tout va bien, sinon None.
     """
     if not resp:
-        print(f"{context}: no response object provided.")
+        log("error", context, "no response received")
         return None
 
     # Tente de décoder le JSON
     try:
         data = resp.json()
     except Exception as e:
-        print(f"{context}: invalid JSON ({e})")
+        log("error", context, f"invalid JSON response: {e}")
         return None
 
     # Vérifie la présence des champs logiques requis
     if required_fields:
         missing = [f for f in required_fields if f not in data]
         if missing:
-            print(f"{context}: missing expected fields: {', '.join(missing)}")
+            log("error", context, f"missing fields in response: {missing}")
             return None
 
     return data
@@ -119,11 +124,11 @@ def register_account(args):
     """Création d'un nouveau compte utilisateur."""
     # vérifie qu'on est pas déjà connecté
     if Session.valid():
-        print("You are already logged in. Please logout before creating a new account.")
+        log("info", "Register", "User is already logged in.")
         return
 
     username = args.username
-    print(f"Creation of a new account '{username}'")
+    log("info", "Register", f"Starting registration for username '{username}'")
 
     # Demande du mot de passe
     password = getpass.getpass("Enter your password: ")
@@ -176,17 +181,16 @@ def register_account(args):
     )
     # Vérification de la création côté serveur
     if not data or data["status"] != "ok":
-        print("Register: unexpected action.")
+        log("error", "Register", "unexpected server response")
         return
 
-    
-    print(f"The account '{username}' has been succesfully created")
+    log("info", "Register", f"Account '{username}' created successfully")
 
 def login_account(args):
     """Authentification d'un utilisateur existant via SRP."""
     # Vérifie si une session locale est déjà active
     if Session.valid():
-        print("You are already logged in. Please logout first.")
+        log("info", "Login", "User is already logged in.")
         return
 
     username = args.username
@@ -244,7 +248,7 @@ def login_account(args):
     session_id = data.get("session_id")
     usr.verify_session(HAMK)
     if not usr.authenticated() or not session_id:
-        print("Error: incorrect username or password")
+        log("error", "Login", "incorrect username or password")
         return
     Session.save(username, session_id)
 
@@ -276,17 +280,17 @@ def login_account(args):
         cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
         private_user_key = cipher.decrypt_and_verify(private_key_enc, tag)
     except ValueError:
-        print("Error: unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
+        log("error", "Login", "unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
         return
 
-    print(f"Login successful, welcome {username}.")
-    
+    log("info", "Login", f"Login successful, welcome {username}.")
+
 
 def logout_account(_args):
     """Déconnexion de l'utilisateur (révocation de la session côté client et serveur)."""
     session_id = Session.load()
     if not session_id:
-        print("No active session found.")
+        log("info", "Logout", "No active session found.")
         return
 
     data = check_resp(
@@ -295,9 +299,9 @@ def logout_account(_args):
         context="Logout: revoke session"
     )
     if not data or data.get("status") != "ok":
-        print("Session was already invalid or could not be revoked. Local session not cleared.")
+        log("error", "Logout", "Session was already invalid or could not be revoked. Local session not cleared.")
         return
 
     
     Session.clear()
-    print("Logout successful. Session terminated.")
+    log("info", "Logout", "Logout successful. Session terminated.")
