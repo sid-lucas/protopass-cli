@@ -35,6 +35,34 @@ def api_post(endpoint, payload={}):
         return None
     return resp
 
+def check_resp(resp, required_fields=None, context="Server response"):
+    """
+    Vérifie la cohérence logique d'une réponse HTTP déjà validée par api_post().
+    - resp: objet Response (ou None)
+    - required_fields: liste des champs attendus dans le JSON
+    - context: texte pour indiquer d'où vient la vérif (login, register, etc.)
+    Retourne le JSON décodé si tout va bien, sinon None.
+    """
+    if not resp:
+        print(f"{context}: no response object provided.")
+        return None
+
+    # Tente de décoder le JSON
+    try:
+        data = resp.json()
+    except Exception as e:
+        print(f"{context}: invalid JSON ({e})")
+        return None
+
+    # Vérifie la présence des champs logiques requis
+    if required_fields:
+        missing = [f for f in required_fields if f not in data]
+        if missing:
+            print(f"{context}: missing expected fields: {', '.join(missing)}")
+            return None
+
+    return data
+
 
 # ============================================================
 # Classe Session (gestion locale de session)
@@ -140,9 +168,15 @@ def register_account(args):
         "tag": base64.b64encode(tag).decode()
     }
 
-    # envoi au serveur sur la route /register
-    resp = api_post("/register", payload)
-    if not resp:
+    # Envoie du nouvel utilisateur au serveur
+    data = check_resp(
+        api_post("/register", payload),
+        required_fields=["status", "username"],
+        context="Register"
+    )
+    # Vérification de la création côté serveur
+    if not data or data["status"] != "ok":
+        print("Register: unexpected action.")
         return
 
     
@@ -167,70 +201,72 @@ def login_account(args):
     )
 
     # client calcul sa clé publique (A)
-    # The first return value is unused; '_' is used by convention to indicate this.
+    # la première valeur de retour est inutilisée
+    # '_' est utilisé par convention pour indiquer cela
     _, A = usr.start_authentication()
 
+
+    # Envoi au serveur le username et la clé publique (A)
     payload = {
         "username": username,
         "A": base64.b64encode(A).decode()
     }
+    data = check_resp(
+        api_post("/srp/start", payload),
+        required_fields=["salt", "B"],
+        context="SRP start"
+    )
+    if not data: return
 
-    # Envoi au serveur
-    resp = api_post("/srp/start", payload)
-    if not resp:
-        return
-
-
-    # Réception du set et clé publique (B) du serveur
-    data = resp.json()
+    # Réception du sel et clé publique (B) du serveur
     salt = base64.b64decode(data["salt"])
     B = base64.b64decode(data["B"])
 
     # Validation du challenge
     M = usr.process_challenge(salt, B)
 
-    # Envoi de la preuve au serveur pour vérification
+    # Envoi au serveur du challenge complété (M)
     payload = {
         "username": username,
         "M": base64.b64encode(M).decode()
     }
-    resp = api_post("/srp/verify", payload)
-    if not resp:
-        return
+    data = check_resp(
+        api_post("/srp/verify", payload),
+        required_fields=["HAMK", "session_id"],
+        context="SRP verify"
+    )
+    if not data: return
 
-
-    data = resp.json()
+    # Réception de la preuve d'authentification finale (HAMK)
     HAMK = base64.b64decode(data["HAMK"])
 
-    # Validation finale
+    # Validation finale de la session SRP
     session_id = data.get("session_id")
     usr.verify_session(HAMK)
     if not usr.authenticated() or not session_id:
         print("Error: incorrect username or password")
         return
-
     Session.save(username, session_id)
 
     # Demande au serveur la user key et réceptionne les données
-    resp = api_post("/userkey")
-    if not resp or resp.status_code != 200:
-        return
+    data = check_resp(
+        api_post("/userkey"),
+        required_fields=["private_key_enc", "nonce", "tag"],
+        context="Fetch user key"
+    )
+    if not data: return
 
-    data = resp.json()
+    # Réception des données de la clé privée chiffrée
     private_key_enc_b64 = data.get("private_key_enc")
-    nonce_b64 = data.get("nonce")
-    tag_b64 = data.get("tag")
-
-    if not all([private_key_enc_b64, nonce_b64, tag_b64]):
-        print("Error: incomplete user key data from server.")
-        return
-
     private_key_enc = base64.b64decode(private_key_enc_b64)
+    nonce_b64 = data.get("nonce")
     nonce = base64.b64decode(nonce_b64)
+    tag_b64 = data.get("tag")
     tag = base64.b64decode(tag_b64)
 
+    # Déchiffrement de la clé privée user key avec la clé dérivée bcrypt
     try:
-        # Dérive la clé symétrique et déchiffre la clé privée protégée
+        # Dérivation de la clé AES via bcrypt
         aes_key = bcrypt.kdf(
             password=password.encode(),
             salt=salt,
@@ -246,7 +282,6 @@ def login_account(args):
     print(f"Login successful, welcome {username}.")
     
 
-
 def logout_account(_args):
     """Déconnexion de l'utilisateur (révocation de la session côté client et serveur)."""
     session_id = Session.load()
@@ -254,9 +289,15 @@ def logout_account(_args):
         print("No active session found.")
         return
 
-    resp = api_post("/session/logout", {"session_id": session_id})
-    if not resp:
+    data = check_resp(
+        api_post("/session/logout", {"session_id": session_id}),
+        required_fields=["status"],
+        context="Logout: revoke session"
+    )
+    if not data or data.get("status") != "ok":
+        print("Session was already invalid or could not be revoked. Local session not cleared.")
         return
 
+    
     Session.clear()
     print("Logout successful. Session terminated.")
