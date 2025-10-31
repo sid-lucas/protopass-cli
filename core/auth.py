@@ -10,6 +10,26 @@ from Crypto.Random import get_random_bytes
 import bcrypt
 
 SESSION_FILE = Path(__file__).resolve().parents[1] / "client_data" / "session.json"
+SERVER_URL = "http://127.0.0.1:5000"
+
+def api_post(endpoint, payload):
+    """Wrapper commun pour les requêtes POST vers le serveur Flask."""
+    try:
+        resp = requests.post(f"{SERVER_URL}{endpoint}", json=payload)
+    except requests.exceptions.ConnectionError:
+        print("Error: server unreachable")
+        return None
+
+    if resp.status_code >= 400:
+        # si JSON dispo, essaie de lire le message d'erreur propre
+        try:
+            err = resp.json().get("Error", "")
+        except Exception:
+            err = resp.text
+        print(f"Error ({resp.status_code}): {err}")
+        return None
+    return resp
+
 
 
 def init_vault(_args):
@@ -45,14 +65,15 @@ def register_account(args):
         desired_key_bytes=32,
         rounds=12  # facteur de coût
     )
-    nonce = get_random_bytes(12)
 
     # Génération de la paire de clé RSA (2048 bits) appelée 'user key'
     # Ces clés seront stockée sur le serveur afin de permettre le multiplateforme
     key = RSA.generate(2048)
     private_user_key = key.export_key(format='DER')
     public_user_key = key.publickey().export_key(format='DER')
+    
     # Chiffrement de la clé privée user key avec la clé dérivée bcrypt
+    nonce = get_random_bytes(12)
     cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
     private_user_key_enc, tag = cipher.encrypt_and_digest(private_user_key)
 
@@ -68,16 +89,10 @@ def register_account(args):
     }
 
     # envoi au serveur sur la route /register
-    url = "http://127.0.0.1:5000/register"
-    try:
-        resp = requests.post(url, json=payload)
-    except requests.exceptions.ConnectionError:
-        print("Error: server unreachable")
+    resp = api_post("/register", payload)
+    if not resp:
         return
 
-    # réception du code retour
-    if resp.status_code != 201:
-        print(f"Error: servor responded ({resp.status_code}) : {resp.text}")
     
     print(f"The account '{username}' has been succesfully created")
 
@@ -109,16 +124,10 @@ def login_account(args):
     }
 
     # Envoi au serveur
-    url = "http://127.0.0.1:5000/srp/start"
-    try:
-        resp = requests.post(url, json=payload)
-    except requests.exceptions.ConnectionError:
-        print("Error: server unreachable")
+    resp = api_post("/srp/start", payload)
+    if not resp:
         return
 
-    if resp.status_code != 200:
-        print(f"Error: servor responded ({resp.status_code}) : {resp.text}")
-        return
 
     # Réception du set et clé publique (B) du serveur
     data = resp.json()
@@ -129,13 +138,11 @@ def login_account(args):
     M = usr.process_challenge(salt, B)
 
     # Envoi de la preuve au serveur pour vérification
-    url = "http://127.0.0.1:5000/srp/verify"
     payload = {"M": base64.b64encode(M).decode()}
-    resp = requests.post(url, json=payload)
-
-    if resp.status_code != 200:
-        print(f"Error: servor responded ({resp.status_code}) : {resp.text}")
+    resp = api_post("/srp/verify", payload)
+    if not resp:
         return
+
 
     data = resp.json()
     HAMK = base64.b64decode(data["HAMK"])
@@ -156,23 +163,14 @@ def logout_account(_args):
         print("No active session found.")
         return
 
-    url = "http://127.0.0.1:5000/session/logout"
-    try:
-        resp = requests.post(url, json={"session_id": session_id})
-    except requests.exceptions.ConnectionError:
-        print("Error: server unreachable")
+    resp = api_post("/session/logout", {"session_id": session_id})
+    if not resp:
         return
 
-    if resp.status_code == 204:
-        # Supprime le fichier local de session
-        if SESSION_FILE.exists():
-            SESSION_FILE.unlink()
-        print("Logout successful. Session terminated.")
-    else:
-        print(f"Error: {resp.text}")
-
-
-
+    # Supprime le fichier local de session
+    if SESSION_FILE.exists():
+        SESSION_FILE.unlink()
+    print("Logout successful. Session terminated.")
 
 
 def save_session(username, session_id):
@@ -196,10 +194,7 @@ def is_session_valid():
     if not session_id:
         return False
 
-    try:
-        resp = requests.post("http://127.0.0.1:5000/session/verify", json={"session_id": session_id})
-        if resp.status_code != 200:
-            return False
-        return resp.json().get("valid", False)
-    except requests.exceptions.ConnectionError:
+    resp = api_post("/session/verify", {"session_id": session_id})
+    if not resp:
         return False
+    return resp.json().get("valid", False)

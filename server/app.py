@@ -3,9 +3,31 @@ from server.user_store import add_user, get_user
 from server.session_store import create_session, revoke_session, is_valid, get_session
 import base64, srp
 import os, time
+from functools import wraps
 
 
 app = Flask(__name__)
+
+def require_session(func):
+    """Décorateur Flask pour routes nécessitant une session valide"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        data = request.get_json(force=True) or {}
+        token = data.get("session_id")
+
+        if not token:
+            return jsonify({"Error": "missing session_id"}), 400
+
+        if not is_valid(token):
+            return jsonify({"Error": "invalid or expired session"}), 401
+
+        s = get_session(token)
+        if not s:
+            return jsonify({"Error": "session not found"}), 401
+
+        # injecte le username validé dans les arguments de la route
+        return func(*args, username=s["username"], **kwargs)
+    return wrapper
 
 
 @app.post("/register")
@@ -98,7 +120,7 @@ def srp_verify():
     
     # Authentification SRP réussie -> création d'une session côté serveur
     username = app.config.get("CURRENT_USER", "unknown")
-    session_id = create_session(username, ttl_seconds=3600)
+    session_id = create_session(username)
 
     print(f"[SERVER] New session for '{username}' ({session_id[:10]}...)")
 
@@ -112,22 +134,9 @@ def srp_verify():
 # avant d'exec une commande, le cli contacte le serveur pour vérifier que le session_id est ok
 # vérifie la présence et la validité temporelle du session_id
 @app.post("/session/verify")
-def verify_session():
-    data = request.get_json(force=True)
-    token = data.get("session_id")
-
-    if not token:
-        return jsonify({"valid": False}), 401
-
-    # vérifie via le store central
-    if not is_valid(token):
-        return jsonify({"valid": False}), 401
-
-    s = get_session(token)
-    return jsonify({
-        "valid": True,
-        "username": s["username"]
-    }), 200
+@require_session
+def verify_session(username):
+    return jsonify({"valid": True, "username": username}), 200
 
 
 
@@ -147,7 +156,14 @@ def logout_session():
         return jsonify({"status": "already logged out"}), 200
 
 
+@app.post("/userkey")
+@require_session
+def get_userkey(username):
+    user = get_user(username)
+    if not user:
+        return jsonify({"Error": "user not found"}), 404
 
+    return jsonify(user["user_key"]), 200
 
 
 

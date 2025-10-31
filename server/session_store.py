@@ -24,7 +24,7 @@ def _save(data):
 def create_session(username: str, ttl_seconds: int = 3600) -> str:
     sid = secrets.token_urlsafe(32)  # id opaque, imprévisible
     data = _load()
-    data[sid] = {"username": username, "exp": time.time() + ttl_seconds}
+    data[sid] = {"username": username, "exp": time.time() + ttl_seconds} # session valide 1 heure
     _save(data)
     return sid
 
