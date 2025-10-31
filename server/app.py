@@ -8,8 +8,13 @@ from functools import wraps
 
 app = Flask(__name__)
 
+
+# ============================================================
+#  Décorateurs et Helpers internes
+# ============================================================
+
 def require_session(func):
-    """Décorateur Flask pour routes nécessitant une session valide"""
+    """Décorateur Flask, empêche qu'une route soit appelée sans session valide."""
     @wraps(func)
     def wrapper(*args, **kwargs):
         data = request.get_json(force=True) or {}
@@ -30,8 +35,13 @@ def require_session(func):
     return wrapper
 
 
+# ============================================================
+#  Routes publiques (pas de session requise)
+# ============================================================
+
 @app.post("/register")
 def register():
+    """Enregistre un nouvel utilisateur avec ses données SRP et sa user_key."""
     data = request.get_json(force=True)
     try:
         add_user(
@@ -46,11 +56,9 @@ def register():
     print(f"[SERVER] Registered new user '{data['username']}'.")
     return jsonify({"status": "ok", "username": data['username']}), 201
 
-
-
-
 @app.post("/srp/start")
 def srp_start():
+    """Démarre le protocole SRP côté serveur."""
     # serveur recoit username et clé publique du client (A)
     data = request.get_json(force=True)
     username = data.get("username")
@@ -94,10 +102,9 @@ def srp_start():
         "B": base64.b64encode(B).decode()
     }), 200
 
-
-
 @app.post("/srp/verify")
 def srp_verify():
+    """Vérifie le challenge SRP complété par le client."""
     # serveur recoit le challenge complété par le client
     data = request.get_json(force=True)
     M_b64 = data.get("M")
@@ -131,17 +138,19 @@ def srp_verify():
     }), 200
 
 
-# avant d'exec une commande, le cli contacte le serveur pour vérifier que le session_id est ok
-# vérifie la présence et la validité temporelle du session_id
+# ============================================================
+#  Routes protégées (requièrent une session valide)
+# ============================================================
+
 @app.post("/session/verify")
 @require_session
 def verify_session(username):
+    """Permet au client de vérifier la validité de sa session avant d'exécuter une commande protégée."""
     return jsonify({"valid": True, "username": username}), 200
-
-
 
 @app.post("/session/logout")
 def logout_session():
+    """Révoque une session côté serveur."""
     data = request.get_json(force=True)
     token = data.get("session_id")
 
@@ -155,10 +164,10 @@ def logout_session():
     else:
         return jsonify({"status": "already logged out"}), 200
 
-
 @app.post("/userkey")
 @require_session
 def get_userkey(username):
+    """Retourne la user_key de l'utilisateur authentifié."""
     user = get_user(username)
     if not user:
         return jsonify({"Error": "user not found"}), 404
@@ -166,15 +175,8 @@ def get_userkey(username):
     return jsonify(user["user_key"]), 200
 
 
-
-
-
-
-
-
+# ============================================================
+#  Point d'entrée serveur
+# ============================================================
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
-
-
-
-

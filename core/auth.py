@@ -11,6 +11,11 @@ import bcrypt
 
 SERVER_URL = "http://127.0.0.1:5000"
 
+
+# ============================================================
+# Helpers Internes
+# ============================================================
+
 def api_post(endpoint, payload):
     """Wrapper commun pour les requêtes POST vers le serveur Flask."""
     try:
@@ -29,6 +34,10 @@ def api_post(endpoint, payload):
         return None
     return resp
 
+
+# ============================================================
+# Classe Session (gestion locale de session)
+# ============================================================
 
 class Session:
     """Gère la session locale du client (sauvegarde, validation, suppression)."""
@@ -70,11 +79,15 @@ class Session:
         return resp.json().get("valid", False)
 
 
+# ============================================================
+# Commandes CLI
+# ============================================================
 
 def init_vault(_args):
     print("salut a tous")
 
 def register_account(args):
+    """Création d'un nouveau compte utilisateur."""
     # vérifie qu'on est pas déjà connecté
     if Session.valid():
         print("You are already logged in. Please logout before creating a new account.")
@@ -134,8 +147,8 @@ def register_account(args):
     
     print(f"The account '{username}' has been succesfully created")
 
-
 def login_account(args):
+    """Authentification d'un utilisateur existant via SRP."""
     # Vérifie si une session locale est déjà active
     if Session.valid():
         print("You are already logged in. Please logout first.")
@@ -193,8 +206,8 @@ def login_account(args):
     else:
         print("Error: incorrect username or password")
 
-
 def logout_account(_args):
+    """Déconnexion de l'utilisateur (révocation de la session côté client et serveur)."""
     session_id = Session.load()
     if not session_id:
         print("No active session found.")
@@ -206,5 +219,4 @@ def logout_account(_args):
 
     Session.clear()
     print("Logout successful. Session terminated.")
-
 
