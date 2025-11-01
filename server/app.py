@@ -4,8 +4,6 @@ from server.session_store import create_session, revoke_session, is_valid, get_s
 import base64, srp
 import os, time
 from functools import wraps
-from utils.logger import log_server
-from utils.response import make_resp
 
 
 
@@ -47,18 +45,24 @@ def require_session(func):
 def register():
     """Enregistre un nouvel utilisateur avec ses données SRP et sa user_key."""
     data = request.get_json(force=True)
+
     try:
         add_user(
             data["username"], data["salt"], data["vkey"],
             data["public_key"], data["private_key_enc"], data["nonce"], data["tag"]
         )
+    # Erreur données manquantes
     except KeyError as e:
-        return jsonify({"Error": str(e)}), 400 #données manquantes -> Bad Request
+        return make_resp("error", "Register", f"missing required fields: {e}", 400)
+    # Erreur utilisateur déjà existant
     except ValueError as e:
-        return jsonify({"Error": str(e)}), 409 #utilisateur existe déjà -> Conflit
+        return make_resp("error", "Register", "user already exists", 409)
 
-    print(f"[SERVER] Registered new user '{data['username']}'.")
-    return jsonify({"status": "ok", "username": data['username']}), 201
+    # Succès, création de l'utilisateur
+    return make_resp(
+        "ok", "Register", "user created successfully", 201,
+        data={"username": data["username"]}
+    )
 
 @app.post("/srp/start")
 def srp_start():
@@ -69,11 +73,11 @@ def srp_start():
     A_b64 = data.get("A")
 
     if not username or not A_b64:
-        return jsonify({"Error": "missing username or A"}), 400
+        return make_resp("error", "SRP start", "missing username or A", 400)
 
     user = get_user(username)
     if not user:
-        return jsonify({"Error": "unknown user"}), 404
+        return make_resp("error", "SRP start", f"unknown user '{username}'", 404)
 
     # Decode valeurs depuis base64
     A = base64.b64decode(A_b64)
@@ -93,7 +97,7 @@ def srp_start():
     # serveur calcul sa clé publique (B)
     s_B, B = v.get_challenge()
     if s_B is None or B is None:
-        return jsonify({"Error": "invalid SRP A value"}), 400
+        return make_resp("error", "SRP start", "invalid SRP A value", 400)
 
     # Stocke l’objet Verifier pour la suite, et username pour la gestion de session
     app.config["SRP_SESSION"] = v
@@ -101,10 +105,12 @@ def srp_start():
 
 
     # envoie au client le sel et la clé publique server (B)
-    return jsonify({
-        "salt": user["salt"],
-        "B": base64.b64encode(B).decode()
-    }), 200
+    return make_resp("ok", "SRP start", "challenge generated", 200,
+        data={
+            "salt": user["salt"],
+            "B": base64.b64encode(B).decode()
+        }
+    )
 
 @app.post("/srp/verify")
 def srp_verify():
@@ -115,31 +121,28 @@ def srp_verify():
 
     v = app.config.get("SRP_SESSION")
     if not v:
-        return jsonify({"Error": "no active SRP session"}), 400
+        return make_resp("error", "SRP verify", "no active SRP session", 400)
 
     if not M_b64:
-        return jsonify({"Error": "missing M"}), 400
+        return make_resp("error", "SRP verify", "missing M", 400)
 
     M = base64.b64decode(M_b64)
 
     HAMK = v.verify_session(M)
     if HAMK is None:
-        return jsonify({"Error": "bad proof"}), 403
-
-    # sinon : authentification réussie
-    print("[SERVER] SRP authentification successfull")
-    
+        return make_resp("error", "SRP verify", "bad proof", 403)
+ 
     # Authentification SRP réussie -> création d'une session côté serveur
     username = app.config.get("CURRENT_USER", "unknown")
     session_id = create_session(username)
 
-    print(f"[SERVER] New session for '{username}' ({session_id[:10]}...)")
-
     # donne au client la preuve et token de session
-    return jsonify({
-        "HAMK": base64.b64encode(HAMK).decode(),
-        "session_id": session_id
-    }), 200
+    return make_resp("ok", "SRP verify", "authentication successful", 200,
+        data={
+            "HAMK": base64.b64encode(HAMK).decode(),
+            "session_id": session_id
+        }
+    )
 
 
 # ============================================================
@@ -150,7 +153,9 @@ def srp_verify():
 @require_session
 def verify_session(username):
     """Permet au client de vérifier la validité de sa session avant d'exécuter une commande protégée."""
-    return jsonify({"valid": True, "username": username}), 200
+    return make_resp("ok", "Session verify", "session is valid", 200,
+        data={"username": username}
+    )
 
 @app.post("/session/logout")
 def logout_session():
@@ -159,12 +164,12 @@ def logout_session():
     token = data.get("session_id")
 
     if not token:
-        return jsonify({"Error": "missing session_id"}), 400
+        return make_resp("error", "Session logout", "missing session_id", 400)
 
     # Supprime la session côté serveur et informe le client
     revoke_session(token)
     print(f"[SERVER] Session {token[:10]}... revoked")
-    return jsonify({"status": "ok"}), 200
+    return make_resp("ok", "Session logout", "session revoked", 200)
 
 @app.post("/userkey")
 @require_session
@@ -172,9 +177,11 @@ def get_userkey(username):
     """Retourne la user_key de l'utilisateur authentifié."""
     user = get_user(username)
     if not user:
-        return jsonify({"Error": "user not found"}), 404
+        return make_resp("error", "User key", "user not found", 404)
 
-    return jsonify(user["user_key"]), 200
+    return make_resp("ok", "User key", "user key retrieved", 200,
+        data={"user_key": user["user_key"]}
+    )
 
 
 # ============================================================

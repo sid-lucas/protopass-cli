@@ -3,11 +3,11 @@ from .logger import log
 
 SERVER_URL = "http://127.0.0.1:5000"
 
-# Format des réponses JSON serveur :
+# Format des réponses JSON attendues du serveur :
 #{
 #  "status": "ok" | "error",
 #  "context": "Register" | "SRP start" | "SRP verify" | "Session" | "UserKey",
-#  "message": "Texte humain lisible (succès ou erreur)",
+#  "message": "Texte détaillant une erreur ou un succès",
 #  "data": { ... optionnel ... }
 #}
 
