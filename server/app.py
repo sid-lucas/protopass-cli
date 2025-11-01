@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from server.user_store import add_user, get_user
 from server.session_store import create_session, revoke_session, is_valid, get_session
 import base64, srp
@@ -23,14 +23,14 @@ def require_session(func):
         token = data.get("session_id")
 
         if not token:
-            return jsonify({"Error": "missing session_id"}), 400
+            return make_resp("error", "Session", "missing session_id", 400)
 
         if not is_valid(token):
-            return jsonify({"Error": "invalid or expired session"}), 401
+            return make_resp("error", "Session", "invalid or expired session", 401)
 
         s = get_session(token)
         if not s:
-            return jsonify({"Error": "session not found"}), 401
+            return make_resp("error", "Session", "session not found", 401)
 
         # injecte le username validé dans les arguments de la route
         return func(*args, username=s["username"], **kwargs)

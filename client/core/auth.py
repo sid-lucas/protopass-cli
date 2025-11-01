@@ -9,8 +9,9 @@ from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 import bcrypt
 from client.utils.network import api_post, check_resp
-from client.utils.logger import log
+from client.utils.logger import log_clientt
 
+# TODO gérer les envois serveur comme le serveur le fait (make_resp) mais a voir comment faire exactement pour rester dans l'uniformité
 
 # ============================================================
 # Classe Session (gestion locale de session)
@@ -67,11 +68,11 @@ def register_account(args):
     """Création d'un nouveau compte utilisateur."""
     # vérifie qu'on est pas déjà connecté
     if Session.valid():
-        log("info", "Register", "User is already logged in.")
+        log_client("info", "Register", "User is already logged in.")
         return
 
     username = args.username
-    log("info", "Register", f"Starting registration for username '{username}'")
+    log_client("info", "Register", f"Starting registration for username '{username}'")
 
     # Demande du mot de passe
     password = getpass.getpass("Enter your password: ")
@@ -125,13 +126,13 @@ def register_account(args):
     # Vérification de la création côté serveur
     if not data or data["status"] != "ok": return
 
-    log("info", "Register", f"Account '{username}' created successfully")
+    log_clientt("info", "Register", f"Account '{username}' created successfully")
 
 def login_account(args):
     """Authentification d'un utilisateur existant via SRP."""
     # Vérifie si une session locale est déjà active
     if Session.valid():
-        log("info", "Login", "User is already logged in.")
+        log_client("info", "Login", "User is already logged in.")
         return
 
     username = args.username
@@ -189,7 +190,7 @@ def login_account(args):
     session_id = data.get("session_id")
     usr.verify_session(HAMK)
     if not usr.authenticated() or not session_id:
-        log("error", "Login", "incorrect username or password")
+        log_client("error", "Login", "incorrect username or password")
         return
     Session.save(username, session_id)
 
@@ -221,17 +222,17 @@ def login_account(args):
         cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
         private_user_key = cipher.decrypt_and_verify(private_key_enc, tag)
     except ValueError:
-        log("error", "Login", "unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
+        log_client("error", "Login", "unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
         return
 
-    log("info", "Login", f"Login successful, welcome {username}.")
+    log_client("info", "Login", f"Login successful, welcome {username}.")
 
 
 def logout_account(_args):
     """Déconnexion de l'utilisateur (révocation de la session côté client et serveur)."""
     session_id = Session.load()
     if not session_id:
-        log("info", "Logout", "No active session found.")
+        log_client("info", "Logout", "No active session found.")
         return
 
     # Appel unique + vérif cohérente via check_resp
@@ -245,4 +246,4 @@ def logout_account(_args):
     # Nettoyage de la session locale
     Session.clear()
     if data.get("status") == "ok":
-        log("info", "Logout", "Logout successful. Session terminated.")
+        log_client("info", "Logout", "Logout successful. Session terminated.")
