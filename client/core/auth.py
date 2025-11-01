@@ -8,65 +8,8 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 import bcrypt
-
-SERVER_URL = "http://127.0.0.1:5000"
-
-
-# ============================================================
-# Helpers Internes
-# ============================================================
-
-def log(level, context, message):
-    """Affiche un message formaté de manière cohérente (prépare les futurs logs)."""
-    print(f"[{level.upper()}] {context}: {message}")
-
-
-def api_post(endpoint, payload={}):
-    """Wrapper commun pour les requêtes POST vers le serveur Flask."""
-    try:
-        resp = requests.post(f"{SERVER_URL}{endpoint}", json=payload)
-    except requests.exceptions.ConnectionError:
-        log("error", f"API POST {endpoint}", "unable to connect to server")
-        return None
-
-    # Gestion des erreurs réseau / HTTP
-    if not resp.ok:
-        # si JSON dispo, essaie de lire le message d'erreur propre
-        try:
-            err = resp.json().get("Error", "")
-        except Exception:
-            err = resp.text
-        log("error", f"API POST {endpoint}", f"HTTP {resp.status_code} - {err}")
-        return None
-    return resp
-
-def check_resp(resp, required_fields=None, context="Server response"):
-    """
-    Vérifie la cohérence logique d'une réponse HTTP déjà validée par api_post().
-    - resp: objet Response (ou None)
-    - required_fields: liste des champs attendus dans le JSON
-    - context: texte pour indiquer d'où vient la vérif (login, register, etc.)
-    Retourne le JSON décodé si tout va bien, sinon None.
-    """
-    if not resp:
-        log("error", context, "no response received")
-        return None
-
-    # Tente de décoder le JSON
-    try:
-        data = resp.json()
-    except Exception as e:
-        log("error", context, f"invalid JSON response: {e}")
-        return None
-
-    # Vérifie la présence des champs logiques requis
-    if required_fields:
-        missing = [f for f in required_fields if f not in data]
-        if missing:
-            log("error", context, f"missing fields in response: {missing}")
-            return None
-
-    return data
+from client.utils.network import api_post, check_resp
+from client.utils.logger import log
 
 
 # ============================================================

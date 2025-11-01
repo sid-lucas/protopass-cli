@@ -10,8 +10,13 @@ app = Flask(__name__)
 
 
 # ============================================================
-#  Décorateurs et Helpers internes
+#  Helpers internes et Décorateurs
 # ============================================================
+
+def log(level, context, message):
+    """Affiche un message formaté de manière cohérente côté serveur (prépare les futurs logs)."""
+    print(f"[{level.upper()}] [{context}] {message}")
+
 
 def require_session(func):
     """Décorateur Flask, empêche qu'une route soit appelée sans session valide."""
