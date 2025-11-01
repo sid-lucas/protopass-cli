@@ -156,11 +156,11 @@ def logout_session():
 
     if not token:
         return jsonify({"Error": "missing session_id"}), 400
-    elif revoke_session(token):
-        print(f"[SERVER] Session {token[:10]}... revoked")
-        return jsonify({"status": "ok"}), 200
-    else:
-        return jsonify({"status": "already logged out"}), 200
+
+    # Supprime la session côté serveur et informe le client
+    revoke_session(token)
+    print(f"[SERVER] Session {token[:10]}... revoked")
+    return jsonify({"status": "ok"}), 200
 
 @app.post("/userkey")
 @require_session

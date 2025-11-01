@@ -180,9 +180,7 @@ def register_account(args):
         context="Register"
     )
     # Vérification de la création côté serveur
-    if not data or data["status"] != "ok":
-        log("error", "Register", "unexpected server response")
-        return
+    if not data or data["status"] != "ok": return
 
     log("info", "Register", f"Account '{username}' created successfully")
 
@@ -301,18 +299,7 @@ def logout_account(_args):
     )
     if not data: return
 
-    status = data.get("status")
-
-    if status == "ok":
-        Session.clear()
+    # Nettoyage de la session locale
+    Session.clear()
+    if data.get("status") == "ok":
         log("info", "Logout", "Logout successful. Session terminated.")
-        return
-
-    if status == "already logged out":
-        Session.clear()
-        log("info", "Logout", "Session already invalid on server. Local session cleared.")
-        return
-
-    # cas non prévu
-    log("error", "Logout", f"Unexpected server response: {status}")
-
