@@ -3,6 +3,15 @@ from .logger import log
 
 SERVER_URL = "http://127.0.0.1:5000"
 
+# Format des réponses JSON serveur :
+#{
+#  "status": "ok" | "error",
+#  "context": "Register" | "SRP start" | "SRP verify" | "Session" | "UserKey",
+#  "message": "Texte humain lisible (succès ou erreur)",
+#  "data": { ... optionnel ... }
+#}
+
+
 def api_post(endpoint, payload=None):
     """Envoie une requête POST au serveur."""
     try:

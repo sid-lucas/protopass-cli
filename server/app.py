@@ -4,6 +4,9 @@ from server.session_store import create_session, revoke_session, is_valid, get_s
 import base64, srp
 import os, time
 from functools import wraps
+from utils.logger import log_server
+from utils.response import make_resp
+
 
 
 app = Flask(__name__)
@@ -12,10 +15,6 @@ app = Flask(__name__)
 # ============================================================
 #  Helpers internes et Décorateurs
 # ============================================================
-
-def log(level, context, message):
-    """Affiche un message formaté de manière cohérente côté serveur (prépare les futurs logs)."""
-    print(f"[{level.upper()}] [{context}] {message}")
 
 
 def require_session(func):
