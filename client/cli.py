@@ -9,13 +9,12 @@ def main():
         description="Prototype password manager CLI"
     )
 
-    # Espace pour des sous-commandes (init, login, etc.)
+    # Espace pour des sous-commandes (register, login, etc.)
     subparsers = parser.add_subparsers(dest="command", help="commands")
 
-    # déclaration sous-commande 'init' et association a une fonction
-    p_init = subparsers.add_parser("init", help="test init")
-    p_init.set_defaults(func=auth.init_vault)
-
+    # ============================================================
+    # Commandes
+    # ============================================================
     p_register = subparsers.add_parser("register", help="Register a new account")
     p_register.add_argument("--username", required=True, help="Username of the account")
     p_register.set_defaults(func=auth.register_account)

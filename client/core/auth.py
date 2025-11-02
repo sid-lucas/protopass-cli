@@ -239,15 +239,14 @@ def logout_account(_args):
     if not session_id:
         log_client("info", "Logout", "No active session found.")
         return
-    print("test1")
+        
     data = handle_resp(
         api_post("/session/logout", {"session_id": session_id}),
         context="Logout"
     )
-
-    print("test2")
-    if data is None: return
-    print("test3")
+    if data is None: 
+        log_client("error", "Logout", "failed to revoke session on server.")
+        return
 
     # Nettoyage de la session locale
     Session.clear()
