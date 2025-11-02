@@ -168,7 +168,6 @@ def logout_session():
 
     # Supprime la session côté serveur et informe le client
     revoke_session(token)
-    print(f"[SERVER] Session {token[:10]}... revoked")
     return make_resp("ok", "Session logout", f"Session {token[:10]}... revoked", 200)
 
 @app.post("/userkey")

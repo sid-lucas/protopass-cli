@@ -124,7 +124,7 @@ def register_account(args):
         required_fields=["username"],
         context="Register"
     )
-    if not data: return
+    if data is None: return
 
     log_client("info", "Register", f"Account '{username}' created successfully")
 
@@ -162,7 +162,7 @@ def login_account(args):
         required_fields=["salt", "B"],
         context="SRP start"
     )
-    if not data: return
+    if data is None: return
 
     # Réception du sel et clé publique (B) du serveur
     salt = base64.b64decode(data["salt"])
@@ -181,7 +181,7 @@ def login_account(args):
         required_fields=["HAMK", "session_id"],
         context="SRP verify"
     )
-    if not data: return
+    if data is None: return
 
     # Réception de la preuve d'authentification finale (HAMK)
     HAMK = base64.b64decode(data["HAMK"])
@@ -200,7 +200,7 @@ def login_account(args):
         required_fields=["user_key"],
         context="Fetch user key"
     )
-    if not data: return
+    if data is None: return
 
     # Réception des données de la clé privée chiffrée
     user_key = data.get("user_key", {})
@@ -241,12 +241,15 @@ def logout_account(_args):
     if not session_id:
         log_client("info", "Logout", "No active session found.")
         return
-
+    print("test1")
     data = handle_resp(
         api_post("/session/logout", {"session_id": session_id}),
         context="Logout"
     )
-    if not data: return
+
+    print("test2")
+    if data is None: return
+    print("test3")
 
     # Nettoyage de la session locale
     Session.clear()
