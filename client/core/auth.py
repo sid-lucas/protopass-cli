@@ -11,14 +11,12 @@ import bcrypt
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
 
-# TODO gérer les envois serveur comme le serveur le fait (make_resp) mais a voir comment faire exactement pour rester dans l'uniformité
-
-# ============================================================
-# Classe Session (gestion locale de session)
-# ============================================================
-
 class Session:
-    """Gère la session locale du client (sauvegarde, validation, suppression)."""
+    """
+    Gère la session locale du client (sauvegarde, validation, suppression).
+    Les sessions sont identifiées par un session_id fourni par le serveur.
+    """
+
     PATH = Path(__file__).resolve().parents[1] / "client_data" / "session.json"
 
     @classmethod
@@ -59,16 +57,11 @@ class Session:
         return bool(data)
 
 
-
-# ============================================================
-# Commandes CLI
-# ============================================================
-
-def init_vault(_args):
-    print("salut a tous")
-
 def register_account(args):
-    """Création d'un nouveau compte utilisateur."""
+    """
+    Création d'un nouveau compte utilisateur.
+    """
+
     # vérifie qu'on est pas déjà connecté
     if Session.valid():
         log_client("info", "Register", "User is already logged in.")
@@ -129,7 +122,10 @@ def register_account(args):
     log_client("info", "Register", f"Account '{username}' created successfully")
 
 def login_account(args):
-    """Authentification d'un utilisateur existant via SRP."""
+    """
+    Authentification d'un utilisateur existant via SRP.
+    """
+
     # Vérifie si une session locale est déjà active
     if Session.valid():
         log_client("info", "Login", "User is already logged in.")
@@ -234,9 +230,11 @@ def login_account(args):
 
     log_client("info", "Login", f"Login successful, welcome {username}.")
 
-
 def logout_account(_args):
-    """Déconnexion de l'utilisateur (révocation de la session côté client et serveur)."""
+    """
+    Déconnexion de l'utilisateur (révocation de la session côté client et serveur).
+    """
+
     session_id = Session.load()
     if not session_id:
         log_client("info", "Logout", "No active session found.")

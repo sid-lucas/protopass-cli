@@ -6,14 +6,12 @@ import os, time
 from functools import wraps
 from server.utils.response import make_resp
 
-
 app = Flask(__name__)
 
 
 # ============================================================
 #  Helpers internes et Décorateurs
 # ============================================================
-
 
 def require_session(func):
     """Décorateur Flask, empêche qu'une route soit appelée sans session valide."""
@@ -152,14 +150,20 @@ def srp_verify():
 @app.post("/session/verify")
 @require_session
 def verify_session(username):
-    """Permet au client de vérifier la validité de sa session avant d'exécuter une commande protégée."""
+    """
+    Permet au client de vérifier la validité de sa session avant d'exécuter une commande protégée.
+    """
+
     return make_resp("ok", "Session verify", "session is valid", 200,
         data={"username": username}
     )
 
 @app.post("/session/logout")
 def logout_session():
-    """Révoque une session côté serveur."""
+    """
+    Révoque une session côté serveur.
+    """
+
     data = request.get_json(force=True)
     token = data.get("session_id")
 
@@ -173,7 +177,10 @@ def logout_session():
 @app.post("/userkey")
 @require_session
 def get_userkey(username):
-    """Retourne la user_key de l'utilisateur authentifié."""
+    """
+    Retourne la user_key de l'utilisateur authentifié.
+    """
+
     user = get_user(username)
     if not user:
         return make_resp("error", "User key", "user not found", 404)

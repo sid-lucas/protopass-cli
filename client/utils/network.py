@@ -13,7 +13,10 @@ SERVER_URL = "http://127.0.0.1:5000"
 
 
 def api_post(endpoint, payload=None):
-    """Envoie une requête POST au serveur et gère les logs réseau."""
+    """
+    Envoie une requête POST au serveur et gère les logs réseau.
+    """
+    
     url = f"{SERVER_URL}{endpoint}"
 
     try:
@@ -48,6 +51,7 @@ def handle_resp(resp, required_fields=None, context="Server"):
     Returns:
         dict or None: Les données extraites de la réponse si succès et champs requis présents, sinon None.
     """
+
     if not resp:
         log_client("error", context, "no response received")
         return None
