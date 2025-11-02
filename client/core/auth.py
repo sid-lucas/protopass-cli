@@ -230,7 +230,7 @@ def login_account(args):
 
     log_client("info", "Login", f"Login successful, welcome {username}.")
 
-def logout_account(_args):
+def logout_account(args):
     """
     Déconnexion de l'utilisateur (révocation de la session côté client et serveur).
     """

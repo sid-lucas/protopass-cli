@@ -1,5 +1,6 @@
 import argparse
 from core import auth
+from core import vault
 
 
 def main():
@@ -13,7 +14,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="commands")
 
     # ============================================================
-    # Commandes
+    # Commandes d'authentification
     # ============================================================
     p_register = subparsers.add_parser("register", help="Register a new account")
     p_register.add_argument("--username", required=True, help="Username of the account")
@@ -26,6 +27,11 @@ def main():
     p_logout = subparsers.add_parser("logout", help="Logout from current session")
     p_logout.set_defaults(func=auth.logout_account)
 
+    # ============================================================
+    # Commandes gestion vault
+    # ============================================================
+    p_vault = subparsers.add_parser("vault", help="Manage vaults")
+    vault_sub = p_vault.add_subparsers(dest="vault_command")
 
 
     # Lit ce que l'user passe comme arguments (après 'python cli.py')
