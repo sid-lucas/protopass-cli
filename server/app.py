@@ -4,7 +4,7 @@ from server.session_store import create_session, revoke_session, is_valid, get_s
 import base64, srp
 import os, time
 from functools import wraps
-
+from server.utils.response import make_resp
 
 
 app = Flask(__name__)
@@ -169,7 +169,7 @@ def logout_session():
     # Supprime la session côté serveur et informe le client
     revoke_session(token)
     print(f"[SERVER] Session {token[:10]}... revoked")
-    return make_resp("ok", "Session logout", "session revoked", 200)
+    return make_resp("ok", "Session logout", f"Session {token[:10]}... revoked", 200)
 
 @app.post("/userkey")
 @require_session

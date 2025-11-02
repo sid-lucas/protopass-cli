@@ -8,8 +8,8 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 import bcrypt
-from client.utils.network import api_post, check_resp
-from client.utils.logger import log_clientt
+from utils.network import api_post, handle_resp
+from utils.logger import log_client
 
 # TODO gérer les envois serveur comme le serveur le fait (make_resp) mais a voir comment faire exactement pour rester dans l'uniformité
 
@@ -51,10 +51,13 @@ class Session:
         if not sid:
             return False
 
-        resp = api_post("/session/verify", {"session_id": sid})
-        if not resp:
-            return False
-        return resp.json().get("valid", False)
+        data = handle_resp(
+            api_post("/session/verify", {"session_id": sid}),
+            required_fields=["username"],
+            context="Session verify"
+        )
+        return bool(data)
+
 
 
 # ============================================================
@@ -106,7 +109,7 @@ def register_account(args):
     cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
     private_user_key_enc, tag = cipher.encrypt_and_digest(private_user_key)
 
-    # Préparation du JSON
+    # Envoie du nouvel utilisateur au serveur
     payload = {
         "username": username,
         "salt": salt_b64,
@@ -116,17 +119,14 @@ def register_account(args):
         "nonce": base64.b64encode(nonce).decode(),
         "tag": base64.b64encode(tag).decode()
     }
-
-    # Envoie du nouvel utilisateur au serveur
-    data = check_resp(
+    data = handle_resp(
         api_post("/register", payload),
-        required_fields=["status", "username"],
+        required_fields=["username"],
         context="Register"
     )
-    # Vérification de la création côté serveur
-    if not data or data["status"] != "ok": return
+    if not data: return
 
-    log_clientt("info", "Register", f"Account '{username}' created successfully")
+    log_client("info", "Register", f"Account '{username}' created successfully")
 
 def login_account(args):
     """Authentification d'un utilisateur existant via SRP."""
@@ -157,7 +157,7 @@ def login_account(args):
         "username": username,
         "A": base64.b64encode(A).decode()
     }
-    data = check_resp(
+    data = handle_resp(
         api_post("/srp/start", payload),
         required_fields=["salt", "B"],
         context="SRP start"
@@ -176,7 +176,7 @@ def login_account(args):
         "username": username,
         "M": base64.b64encode(M).decode()
     }
-    data = check_resp(
+    data = handle_resp(
         api_post("/srp/verify", payload),
         required_fields=["HAMK", "session_id"],
         context="SRP verify"
@@ -195,20 +195,27 @@ def login_account(args):
     Session.save(username, session_id)
 
     # Demande au serveur la user key et réceptionne les données
-    data = check_resp(
+    data = handle_resp(
         api_post("/userkey", {"session_id": session_id}),
-        required_fields=["private_key_enc", "nonce", "tag"],
+        required_fields=["user_key"],
         context="Fetch user key"
     )
     if not data: return
 
     # Réception des données de la clé privée chiffrée
-    private_key_enc_b64 = data.get("private_key_enc")
+    user_key = data.get("user_key", {})
+    private_key_enc_b64 = user_key.get("private_key_enc")
+    nonce_b64 = user_key.get("nonce")
+    tag_b64 = user_key.get("tag")
+
+    if not all([private_key_enc_b64, nonce_b64, tag_b64]):
+        log_client("error", "Login", "incomplete user key data from server.")
+        return
+
     private_key_enc = base64.b64decode(private_key_enc_b64)
-    nonce_b64 = data.get("nonce")
     nonce = base64.b64decode(nonce_b64)
-    tag_b64 = data.get("tag")
     tag = base64.b64decode(tag_b64)
+
 
     # Déchiffrement de la clé privée user key avec la clé dérivée bcrypt
     try:
@@ -235,15 +242,12 @@ def logout_account(_args):
         log_client("info", "Logout", "No active session found.")
         return
 
-    # Appel unique + vérif cohérente via check_resp
-    data = check_resp(
+    data = handle_resp(
         api_post("/session/logout", {"session_id": session_id}),
-        required_fields=["status"],
         context="Logout"
     )
     if not data: return
 
     # Nettoyage de la session locale
     Session.clear()
-    if data.get("status") == "ok":
-        log_client("info", "Logout", "Logout successful. Session terminated.")
+    log_client("info", "Logout", "Logout successful. Session terminated.")

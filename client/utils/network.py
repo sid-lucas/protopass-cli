@@ -1,5 +1,5 @@
 import requests
-from client.utils.logger import log_client
+from utils.logger import log_client
 
 SERVER_URL = "http://127.0.0.1:5000"
 
@@ -12,20 +12,31 @@ SERVER_URL = "http://127.0.0.1:5000"
 #}
 
 
-def api_post(endpoint, payload={}):
-    """Envoie une requête POST au serveur."""
+def api_post(endpoint, payload=None):
+    """Envoie une requête POST au serveur et gère les logs réseau."""
+    url = f"{SERVER_URL}{endpoint}"
+
     try:
-        resp = requests.post(f"{SERVER_URL}{endpoint}", json=payload)
+        log_client("info", "Network", f"sending POST {endpoint}")
+        resp = requests.post(url, json=payload or {})
+        log_client("info", "Network", f"received {resp.status_code} from {endpoint}")
         resp.raise_for_status()
         return resp
+
     except requests.exceptions.ConnectionError:
-        log_client("error", f"API POST {endpoint}", "unable to connect to server")
-        return None
-    except requests.exceptions.RequestException as e:
-        log_client("error", f"API POST {endpoint}", str(e))
+        log_client("error", "Network", f"unable to connect to {url}")
         return None
 
-def check_resp(resp, required_fields=None, context="Server"):
+    except requests.exceptions.Timeout:
+        log_client("error", "Network", f"request to {url} timed out")
+        return None
+
+    except requests.exceptions.RequestException as e:
+        log_client("error", "Network", f"request error on {url}: {e}")
+        return None
+
+
+def handle_resp(resp, required_fields=None, context="Server"):
     """
     Analyse et logue la réponse serveur normalisée.
 
@@ -49,25 +60,23 @@ def check_resp(resp, required_fields=None, context="Server"):
         return None
 
     status = payload.get("status")
-    server_context = payload.get("context", context)
-    message = payload.get("message", "")
-    data = payload.get("data", {})
 
-    # Statut d'erreur
     if status == "error":
-        log_client("error", server_context, message or "unknown server error")
+        log_client("error", payload.get("context", context), payload.get("message", "unknown server error"))
         return None
 
-    # Statut succès
     if status == "ok":
-        log_client("info", server_context, message or "operation successful")
+        log_client("info", payload.get("context", context), payload.get("message", "operation successful"))
+        data = payload.get("data", {})
 
-    # Vérifie la présence des champs requis dans data
-    if required_fields:
-        missing = [f for f in required_fields if f not in data]
-        if missing:
-            log_client("error", server_context, f"missing fields in response data: {missing}")
-            return None
+        # Vérifie les champs requis uniquement en cas de succès
+        if required_fields:
+            missing = [f for f in required_fields if f not in data]
+            if missing:
+                log_client("error", payload.get("context", context), f"missing fields in response data: {missing}")
+                return None
 
-    return data
+        return data
 
+    log_client("error", context, "invalid response status")
+    return None
