@@ -1,4 +1,7 @@
 import argparse
+import os
+import readline
+import atexit
 from core import auth
 from core import vault
 
@@ -20,11 +23,10 @@ def requires_session(command):
 
 def ensure_session(command):
     """
-    Affiche un rappel et annule l'action si la session est requise mais absente.
+    Affiche un rappel et annule l'actio§n si la session est requise mais absente.
     """
     if requires_session(command) and not auth.AccountState.valid():
         print("You must be logged in to use this command.")
-        print("Please run: python cli.py login --username <your_name>")
         return False
     return True
 
@@ -115,6 +117,14 @@ def start_shell(_args=None):
     parser = build_parser()
     exit_keywords = {"exit", "quit", "q"}
     help_keywords = {"help", "?"}
+
+    # Active l'historique et flèches
+    history_path = os.path.expanduser("~/.protopass_history")
+    try:
+        readline.read_history_file(history_path)
+    except FileNotFoundError:
+        pass
+    atexit.register(readline.write_history_file, history_path)
 
     print("ProtoPass CLI Shell. Type 'exit', 'quit' or 'q' to quit.")
 
