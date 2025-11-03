@@ -21,10 +21,10 @@ def _save(data):
     with open(PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-def create_session(username: str, ttl_seconds: int = 3600) -> str:
+def create_session(username: str, ttl_seconds: int = 900) -> str:
     sid = secrets.token_urlsafe(32)  # id opaque, imprévisible
     data = _load()
-    data[sid] = {"username": username, "exp": time.time() + ttl_seconds} # session valide 1 heure
+    data[sid] = {"username": username, "exp": time.time() + ttl_seconds} # session valide 15 minutes
     _save(data)
     return sid
 

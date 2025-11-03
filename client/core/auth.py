@@ -54,6 +54,9 @@ class Session:
             required_fields=["username"],
             context="Session verify"
         )
+        if data is None:
+            cls.clear()
+
         return bool(data)
 
 

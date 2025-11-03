@@ -135,6 +135,8 @@ def srp_verify():
     session_id = create_session(username)
 
     # donne au client la preuve et token de session
+    # /!\ ATTENTION
+    # /!\ le token de session est transféré en clair, implémenter TLS en production !
     return make_resp("ok", "SRP verify", "authentication successful", 200,
         data={
             "HAMK": base64.b64encode(HAMK).decode(),
