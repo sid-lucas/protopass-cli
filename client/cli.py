@@ -32,6 +32,26 @@ def main():
     # ============================================================
     p_vault = subparsers.add_parser("vault", help="Manage vaults")
     vault_sub = p_vault.add_subparsers(dest="vault_command")
+    p_vault.set_defaults(func=lambda args: p_vault.print_help())
+
+    p_vault_create = vault_sub.add_parser("create", help="Create a new vault")
+    p_vault_create.add_argument("--name", required=True, help="Name of the vault")
+    p_vault_create.set_defaults(func=vault.create_vault)
+
+    p_vault_delete = vault_sub.add_parser("delete", help="Delete a vault")
+    p_vault_delete.add_argument("--name", required=True, help="Name of the vault to delete")
+    p_vault_delete.set_defaults(func=vault.delete_vault)
+
+    p_vault_select = vault_sub.add_parser("select", help="Select a vault to use")
+    p_vault_select.add_argument("--name", required=True, help="Name of the vault to select")
+    p_vault_select.set_defaults(func=vault.select_vault)
+
+    p_vault_list = vault_sub.add_parser("list", help="List all vaults")
+    p_vault_list.set_defaults(func=vault.list_vaults)
+
+    
+
+    
 
 
     # Lit ce que l'user passe comme arguments (après 'python cli.py')
@@ -45,7 +65,7 @@ def main():
     restricted = ["login", "register"]
     if args.command not in restricted and not auth.Session.valid():
         print("You must be logged in to use this command.")
-        print("Please run: python cli.py login --username <your_name>") #TODO CHANGE TEXT?
+        print("Please run: python cli.py login --username <your_name>") #TODO change TEXT?
         return
 
     # Exécution de la commande demandée

@@ -231,6 +231,9 @@ def login_account(args):
         log_client("error", "Login", "unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
         return
 
+    #TODO la clé privée déchiffrée doit rester en mémoire et déchiffrer chaque vault key 
+    # qu'on recevra dans le futur
+
     log_client("info", "Login", f"Login successful, welcome {username}.")
 
 def logout_account(args):
