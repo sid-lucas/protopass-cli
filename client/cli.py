@@ -2,16 +2,26 @@ import argparse
 from core import auth
 from core import vault
 
+class ShellArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise ValueError(message)
+
+# Création parseur de commandes
+parser = ShellArgumentParser(
+    prog="protopass",
+    description="Prototype password manager CLI"
+)
+
+restricted = ["login", "register", "shell"]
+
 
 def main():
-    # Création parseur de commandes
-    parser = argparse.ArgumentParser(
-        prog="protonpass-cli",
-        description="Prototype password manager CLI"
-    )
 
     # Espace pour des sous-commandes (register, login, etc.)
     subparsers = parser.add_subparsers(dest="command", help="commands")
+
+    p_shell = subparsers.add_parser("shell", help="Start interactive protopass shell")
+    p_shell.set_defaults(func=start_shell)
 
     # ============================================================
     # Commandes d'authentification
@@ -58,11 +68,10 @@ def main():
     args = parser.parse_args()
 
     if not args.command:
-        parser.print_help()
+        #parser.print_help()
         return
 
     # Vérifie la session avant d'exécuter une commande
-    restricted = ["login", "register"]
     if args.command not in restricted and not auth.AccountState.valid():
         print("You must be logged in to use this command.")
         print("Please run: python cli.py login --username <your_name>") #TODO change TEXT?
@@ -70,6 +79,49 @@ def main():
 
     # Exécution de la commande demandée
     args.func(args)
+
+def start_shell(_args=None):
+    import shlex
+
+    print("ProtoPass CLI Shell. Type 'exit', 'quit' or 'q' to quit.")
+    print("Type 'help' to list available commands.")
+
+    while True:
+        try:
+            raw_input = input("\nprotopass> ").strip()
+            if raw_input in ["exit", "quit", "q"]:
+                break
+            if raw_input in ["help", "?"]:
+                parser.print_help()
+                continue
+            if not raw_input:
+                continue
+
+            args_list = shlex.split(raw_input)
+
+            try:
+                args = parser.parse_args(args_list)
+            except Exception as e:
+                print(e)
+                continue
+            except SystemExit:
+                continue
+
+            if not hasattr(args, "func"):
+                print("Invalid command. Type 'help' for a list of commands.")
+                continue
+
+            # Check session
+            if args.command not in restricted and not auth.AccountState.valid():
+                print("You must be logged in to use this command.")
+                continue
+
+            args.func(args)
+
+        except KeyboardInterrupt:
+            print("\nUse 'q' to quit.")
+        except Exception as e:
+            print(f"[ERROR] {e}")
 
 
 if __name__ == "__main__":
