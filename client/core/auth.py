@@ -50,7 +50,14 @@ class AccountState:
         data = cls._read()
         if not data:
             return None
-        return data.get("public_key")
+        public_key_b64 = data.get("public_key")
+        if not public_key_b64:
+            return None
+        try:
+            return base64.b64decode(public_key_b64)
+        except (ValueError, TypeError):
+            log_client("error", "AccountState", "invalid public key encoding in account_state.json")
+            return None
 
     @classmethod
     def username(cls):
