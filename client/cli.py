@@ -2,22 +2,57 @@ import argparse
 from core import auth
 from core import vault
 
+
 class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         raise ValueError(message)
 
-# Création parseur de commandes
-parser = ShellArgumentParser(
-    prog="protopass",
-    description="Prototype password manager CLI"
-)
 
-restricted = ["login", "register", "shell"]
+SESSION_OPTIONAL_COMMANDS = {"login", "register", "shell"}
 
 
-def main():
+def requires_session(command):
+    """
+    Retourne True si la commande doit être exécutée avec une session valide.
+    """
+    return command not in SESSION_OPTIONAL_COMMANDS
 
-    # Espace pour des sous-commandes (register, login, etc.)
+
+def ensure_session(command):
+    """
+    Affiche un rappel et annule l'action si la session est requise mais absente.
+    """
+    if requires_session(command) and not auth.AccountState.valid():
+        print("You must be logged in to use this command.")
+        print("Please run: python cli.py login --username <your_name>")
+        return False
+    return True
+
+
+def dispatch_command(args):
+    """
+    Point d'entrée commun pour exécuter une commande en tenant compte des règles de session.
+    """
+    if not hasattr(args, "func"):
+        print("Invalid command. Type 'help' for a list of commands.")
+        return
+
+    if not ensure_session(args.command):
+        return
+
+    args.func(args)
+
+
+def build_parser():
+    """
+    Construit l'arborescence complète des commandes (réutilisée en mode shell).
+    """
+    parser = ShellArgumentParser(
+        prog="protopass",
+        description="Prototype password manager CLI"
+    )
+
+    # Sous-parseur principal qui accueille toutes les commandes de premier niveau
     subparsers = parser.add_subparsers(dest="command", help="commands")
 
     p_shell = subparsers.add_parser("shell", help="Start interactive protopass shell")
@@ -41,6 +76,7 @@ def main():
     # Commandes gestion vault
     # ============================================================
     p_vault = subparsers.add_parser("vault", help="Manage vaults")
+    # Crée un sous-sous-parseur pour les actions vault (create/delete/...)
     vault_sub = p_vault.add_subparsers(dest="vault_command")
     p_vault.set_defaults(func=lambda args: p_vault.print_help())
 
@@ -59,69 +95,61 @@ def main():
     p_vault_list = vault_sub.add_parser("list", help="List all vaults")
     p_vault_list.set_defaults(func=vault.list_vaults)
 
-    
+    return parser
 
-    
 
+def main():
+    parser = build_parser()
 
     # Lit ce que l'user passe comme arguments (après 'python cli.py')
     args = parser.parse_args()
 
     if not args.command:
-        #parser.print_help()
         return
 
-    # Vérifie la session avant d'exécuter une commande
-    if args.command not in restricted and not auth.AccountState.valid():
-        print("You must be logged in to use this command.")
-        print("Please run: python cli.py login --username <your_name>") #TODO change TEXT?
-        return
-
-    # Exécution de la commande demandée
-    args.func(args)
+    dispatch_command(args)
 
 def start_shell(_args=None):
     import shlex
 
+    parser = build_parser()
+    exit_keywords = {"exit", "quit", "q"}
+    help_keywords = {"help", "?"}
+
     print("ProtoPass CLI Shell. Type 'exit', 'quit' or 'q' to quit.")
-    print("Type 'help' to list available commands.")
 
     while True:
         try:
-            raw_input = input("\nprotopass> ").strip()
-            if raw_input in ["exit", "quit", "q"]:
-                break
-            if raw_input in ["help", "?"]:
-                parser.print_help()
-                continue
-            if not raw_input:
+            raw_line = input("\nprotopass> ").strip()
+            if not raw_line:
                 continue
 
-            args_list = shlex.split(raw_input)
+            if raw_line in exit_keywords:
+                break
+
+            if raw_line in help_keywords:
+                parser.print_help()
+                continue
+
+            args_list = shlex.split(raw_line)
 
             try:
                 args = parser.parse_args(args_list)
-            except Exception as e:
-                print(e)
+            except ValueError as err:
+                print(err)
                 continue
             except SystemExit:
                 continue
 
-            if not hasattr(args, "func"):
-                print("Invalid command. Type 'help' for a list of commands.")
-                continue
-
-            # Check session
-            if args.command not in restricted and not auth.AccountState.valid():
-                print("You must be logged in to use this command.")
-                continue
-
-            args.func(args)
+            dispatch_command(args)
 
         except KeyboardInterrupt:
             print("\nUse 'q' to quit.")
-        except Exception as e:
-            print(f"[ERROR] {e}")
+        except EOFError:
+            print()
+            break
+        except Exception as err:
+            print(f"[ERROR] {err}")
 
 
 if __name__ == "__main__":
