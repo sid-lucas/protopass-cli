@@ -14,6 +14,13 @@ class ShellArgumentParser(argparse.ArgumentParser):
 SESSION_OPTIONAL_COMMANDS = {"login", "register", "shell"}
 
 
+def current_prompt():
+    username = auth.AccountState.username()
+    if username:
+        return f"{username}@protopass> "
+    return "protopass> "
+
+
 def requires_session(command):
     """
     Retourne True si la commande doit être exécutée avec une session valide.
@@ -130,7 +137,7 @@ def start_shell(_args=None):
 
     while True:
         try:
-            raw_line = input("\nprotopass> ").strip()
+            raw_line = input(f"\n{current_prompt()}").strip()
             if not raw_line:
                 continue
 
