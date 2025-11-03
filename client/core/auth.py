@@ -10,6 +10,8 @@ from Crypto.Random import get_random_bytes
 import bcrypt
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
+import re
+
 
 class AccountState:
     """
@@ -101,6 +103,9 @@ class AccountState:
     def clear_private_key(cls):
         cls._private_key = None
 
+def is_valid_username(username):
+    return re.fullmatch(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{1,18}[a-zA-Z0-9])?$", username) is not None
+
 
 def register_account(args):
     """
@@ -113,6 +118,11 @@ def register_account(args):
         return
 
     username = args.username
+
+    if not is_valid_username(username):
+        log_client("error", "Register", "Invalid username. Use 3-20 letters, digits, '-' or '_'.")
+        return
+        
     log_client("info", "Register", f"Starting registration for username '{username}'")
 
     # Demande du mot de passe

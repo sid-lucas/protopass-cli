@@ -5,14 +5,12 @@ import atexit
 from core import auth
 from core import vault
 
-
 class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         raise ValueError(message)
 
 
 SESSION_OPTIONAL_COMMANDS = {"login", "register", "shell"}
-
 
 def current_prompt():
     username = auth.AccountState.username()
@@ -30,7 +28,7 @@ def requires_session(command):
 
 def ensure_session(command):
     """
-    Affiche un rappel et annule l'actio§n si la session est requise mais absente.
+    Affiche un rappel et annule l'action si la session est requise mais absente.
     """
     if requires_session(command) and not auth.AccountState.valid():
         print("You must be logged in to use this command.")
