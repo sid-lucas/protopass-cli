@@ -12,30 +12,6 @@ class ShellArgumentParser(argparse.ArgumentParser):
 
 SESSION_OPTIONAL_COMMANDS = {"login", "register", "shell"}
 
-def current_prompt():
-    username = auth.AccountState.username()
-    if username:
-        return f"{username}@protopass> "
-    return "protopass> "
-
-
-def requires_session(command):
-    """
-    Retourne True si la commande doit être exécutée avec une session valide.
-    """
-    return command not in SESSION_OPTIONAL_COMMANDS
-
-
-def ensure_session(command):
-    """
-    Affiche un rappel et annule l'action si la session est requise mais absente.
-    """
-    if requires_session(command) and not auth.AccountState.valid():
-        print("You must be logged in to use this command.")
-        return False
-    return True
-
-
 def dispatch_command(args):
     """
     Point d'entrée commun pour exécuter une commande en tenant compte des règles de session.
@@ -44,11 +20,11 @@ def dispatch_command(args):
         print("Invalid command. Type 'help' for a list of commands.")
         return
 
-    if not ensure_session(args.command):
+    if args.command not in SESSION_OPTIONAL_COMMANDS and not auth.AccountState.valid():
+        print("You must be logged in to use this command.")
         return
 
     args.func(args)
-
 
 def build_parser():
     """
@@ -135,7 +111,9 @@ def start_shell(_args=None):
 
     while True:
         try:
-            raw_line = input(f"\n{current_prompt()}").strip()
+            username = auth.AccountState.username()
+            prompt = f"{username}@protopass> " if username else "protopass> "
+            raw_line = input(f"\n{prompt}").strip()
             if not raw_line:
                 continue
 

@@ -19,7 +19,12 @@ class AccountState:
     (username, session_id volatile, clé publique, etc.).
     """
 
-    _private_key = None  # champ mémoire volatile (non sauvegardé)
+    # Champs mémoire volatile (non sauvegardés) utile pour le shell interactif
+    _private_key = None  # Pour des questions de sécurité
+    _cached_username = None  # Pour des questions de performance (évite de relire le fichier à chaque fois)
+    _cached_session_id = None  # idem
+    _cached_public_key = None  # idem
+
     PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
 
     @classmethod
@@ -40,11 +45,17 @@ class AccountState:
             "public_key": public_key
         }
         cls.PATH.write_text(json.dumps(payload, indent=2))
+        cls._cached_username = username
+        cls._cached_session_id = session_id
+        cls._cached_public_key = public_key
 
     @classmethod
     def clear(cls):
         if cls.PATH.exists():
             cls.PATH.unlink()
+        cls._cached_username = None
+        cls._cached_session_id = None
+        cls._cached_public_key = None
 
     @classmethod
     def valid(cls):
@@ -65,20 +76,28 @@ class AccountState:
 
     @classmethod
     def username(cls):
+        if cls._cached_username is not None:
+            return cls._cached_username
         data = cls._read()
         if not data:
             return None
-        return data.get("username")
+        cls._cached_username = data.get("username")
+        return cls._cached_username
 
     @classmethod
     def session_id(cls):
+        if cls._cached_session_id is not None:
+            return cls._cached_session_id
         data = cls._read()
         if not data:
             return None
-        return data.get("session_id")
+        cls._cached_session_id = data.get("session_id")
+        return cls._cached_session_id
 
     @classmethod
     def public_key(cls):
+        if cls._cached_public_key is not None:
+            return cls._cached_public_key
         data = cls._read()
         if not data:
             return None
@@ -86,7 +105,8 @@ class AccountState:
         if not public_key_b64:
             return None
         try:
-            return base64.b64decode(public_key_b64)
+            cls._cached_public_key = base64.b64decode(public_key_b64)
+            return cls._cached_public_key
         except (ValueError, TypeError):
             log_client("error", "AccountState", "invalid public key encoding in account_state.json")
             return None
