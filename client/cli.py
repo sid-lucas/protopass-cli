@@ -63,7 +63,7 @@ def main():
 
     # Vérifie la session avant d'exécuter une commande
     restricted = ["login", "register"]
-    if args.command not in restricted and not auth.Session.valid():
+    if args.command not in restricted and not auth.AccountState.valid():
         print("You must be logged in to use this command.")
         print("Please run: python cli.py login --username <your_name>") #TODO change TEXT?
         return

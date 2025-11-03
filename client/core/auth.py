@@ -11,31 +11,53 @@ import bcrypt
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
 
-class Session:
+class AccountState:
     """
-    Gère la session locale du client (sauvegarde, validation, suppression).
-    Les sessions sont identifiées par un session_id fourni par le serveur.
+    Stocke l'état local du compte : informations persistantes associées à l'utilisateur
+    (username, session_id volatile, clé publique, etc.).
     """
 
-    PATH = Path(__file__).resolve().parents[1] / "client_data" / "session.json"
+    PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
 
     @classmethod
-    def save(cls, username, session_id):
-        cls.PATH.parent.mkdir(parents=True, exist_ok=True)
-        cls.PATH.write_text(json.dumps({
-            "username": username,
-            "session_id": session_id
-        }, indent=2))
-
-    @classmethod
-    def load(cls):
+    def _read(cls):
         if not cls.PATH.exists():
             return None
         try:
-            data = json.loads(cls.PATH.read_text())
-            return data.get("session_id")
+            return json.loads(cls.PATH.read_text())
         except Exception:
             return None
+
+    @classmethod
+    def save(cls, username, session_id, public_key):
+        cls.PATH.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "username": username,
+            "session_id": session_id,
+            "public_key": public_key
+        }
+        cls.PATH.write_text(json.dumps(payload, indent=2))
+
+    @classmethod
+    def session_id(cls):
+        data = cls._read()
+        if not data:
+            return None
+        return data.get("session_id")
+
+    @classmethod
+    def public_key(cls):
+        data = cls._read()
+        if not data:
+            return None
+        return data.get("public_key")
+
+    @classmethod
+    def username(cls):
+        data = cls._read()
+        if not data:
+            return None
+        return data.get("username")
 
     @classmethod
     def clear(cls):
@@ -45,7 +67,7 @@ class Session:
     @classmethod
     def valid(cls):
         """Vérifie si la session locale existe et est encore valide côté serveur."""
-        sid = cls.load()
+        sid = cls.session_id()
         if not sid:
             return False
 
@@ -66,7 +88,7 @@ def register_account(args):
     """
 
     # vérifie qu'on est pas déjà connecté
-    if Session.valid():
+    if AccountState.valid():
         log_client("info", "Register", "User is already logged in.")
         return
 
@@ -130,7 +152,7 @@ def login_account(args):
     """
 
     # Vérifie si une session locale est déjà active
-    if Session.valid():
+    if AccountState.valid():
         log_client("info", "Login", "User is already logged in.")
         return
 
@@ -191,8 +213,6 @@ def login_account(args):
     if not usr.authenticated() or not session_id:
         log_client("error", "Login", "incorrect username or password")
         return
-    Session.save(username, session_id)
-
     # Demande au serveur la user key et réceptionne les données
     data = handle_resp(
         api_post("/userkey", {"session_id": session_id}),
@@ -203,11 +223,12 @@ def login_account(args):
 
     # Réception des données de la clé privée chiffrée
     user_key = data.get("user_key", {})
+    public_key_b64 = user_key.get("public_key")
     private_key_enc_b64 = user_key.get("private_key_enc")
     nonce_b64 = user_key.get("nonce")
     tag_b64 = user_key.get("tag")
 
-    if not all([private_key_enc_b64, nonce_b64, tag_b64]):
+    if not all([public_key_b64, private_key_enc_b64, nonce_b64, tag_b64]):
         log_client("error", "Login", "incomplete user key data from server.")
         return
 
@@ -231,6 +252,9 @@ def login_account(args):
         log_client("error", "Login", "unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
         return
 
+    # Stockage de l'état du compte pour les prochaines commandes
+    AccountState.save(username, session_id, public_key_b64)
+
     #TODO la clé privée déchiffrée doit rester en mémoire et déchiffrer chaque vault key 
     # qu'on recevra dans le futur
 
@@ -241,7 +265,7 @@ def logout_account(args):
     Déconnexion de l'utilisateur (révocation de la session côté client et serveur).
     """
 
-    session_id = Session.load()
+    session_id = AccountState.session_id()
     if not session_id:
         log_client("info", "Logout", "No active session found.")
         return
@@ -255,5 +279,5 @@ def logout_account(args):
         return
 
     # Nettoyage de la session locale
-    Session.clear()
+    AccountState.clear()
     log_client("info", "Logout", "Logout successful. Session terminated.")
