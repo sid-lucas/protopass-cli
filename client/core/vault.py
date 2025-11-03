@@ -1,7 +1,7 @@
 import uuid
 import os
 import base64
-from client.core import auth
+from core import auth
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
 from Crypto.PublicKey import RSA
@@ -19,31 +19,58 @@ def list_vaults(args):
 def create_vault(args):
 
     # Génère un UUID unique pour le vault
-    id = str(uuid.uuid4())
-    name = args.name
+    vault_id = str(uuid.uuid4())
+    vault_name = args.name
 
     # Génère une clé symétrique de 256bits pour le vault
-    key = os.urandom(32)
+    vault_key = os.urandom(32)
 
-    public_key = AccountState.public_key()
+    public_key = auth.AccountState.public_key()
     if public_key is None:
         log_client("error", "Vault Create", "No valid public key found in account state.")
         return
-    
+    private_key = auth.AccountState.private_key()
+    if private_key is None:
+        log_client("error", "Vault Create", "No valid private key found in account state (memory).")
+        return
+
+    # signature de la clé du vault avec la clé privée de l'utilisateur
+    rsa_private = RSA.import_key(private_key)
+    rsa_public = RSA.import_key(public_key)
+
+    vault_key_hash = SHA256.new(vault_key).digest()
+    vault_signature = pkcs1_15.new(rsa_private).sign(SHA256.new(vault_key_hash))
 
     # chiffre la clé du vault avec la clé publique de l'utilisateur
-    rsa_key = RSA.import_key(public_key_bytes)
+    rsa_key = RSA.import_key(rsa_public)
     cipher = PKCS1_OAEP.new(rsa_key)
-    key_enc = cipher.encrypt(key)
-    key_enc_b64 = base64.b64encode(key_enc).decode()
+    vault_key_enc = cipher.encrypt(vault_key)
+    vault_key_enc_b64 = base64.b64encode(vault_key_enc).decode()
 
+    # chiffrement du contenu du vault (nom/entries) avec la clé du vault
+    name_bytes = vault_name.encode()
+    nonce = get_random_bytes(12)
+    cipher_aes = AES.new(vault_key, AES.MODE_GCM, nonce=nonce)
+    name_enc, tag = cipher_aes.encrypt_and_digest(name_bytes)
+
+    # Envoie les informations du nouveau vault au serveur
     payload = {
-        "vault_id": id,
-        "name": name,
-        "key_enc": key_enc_b64
+        "vault_id": vault_id,
+        "key_enc": base64.b64encode(vault_key_enc).decode(),
+        "signature": base64.b64encode(vault_signature).decode(),
+        "name": {
+            "name_enc": base64.b64encode(name_enc).decode(),
+            "name_nonce": base64.b64encode(nonce).decode(),
+            "name_tag": base64.b64encode(tag).decode()
+        },
+        "items": []
     }
+    resp = api_post("/vaults/create", payload)
+    data = handle_resp(
+        resp,
+        required_fields=["vault_id"],
+        context="Vault Create"
+    )
+    if data is None: return
 
-
-    
-
-    print("create")
+    print("vault created")

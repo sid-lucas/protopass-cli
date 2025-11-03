@@ -17,6 +17,7 @@ class AccountState:
     (username, session_id volatile, clé publique, etc.).
     """
 
+    _private_key = None  # champ mémoire volatile (non sauvegardé)
     PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
 
     @classmethod
@@ -37,6 +38,35 @@ class AccountState:
             "public_key": public_key
         }
         cls.PATH.write_text(json.dumps(payload, indent=2))
+
+    @classmethod
+    def clear(cls):
+        if cls.PATH.exists():
+            cls.PATH.unlink()
+
+    @classmethod
+    def valid(cls):
+        """Vérifie si la session locale existe et est encore valide côté serveur."""
+        sid = cls.session_id()
+        if not sid:
+            return False
+
+        data = handle_resp(
+            api_post("/session/verify", {"session_id": sid}),
+            required_fields=["username"],
+            context="Session verify"
+        )
+        if data is None:
+            cls.clear()
+
+        return bool(data)
+
+    @classmethod
+    def username(cls):
+        data = cls._read()
+        if not data:
+            return None
+        return data.get("username")
 
     @classmethod
     def session_id(cls):
@@ -60,33 +90,16 @@ class AccountState:
             return None
 
     @classmethod
-    def username(cls):
-        data = cls._read()
-        if not data:
-            return None
-        return data.get("username")
+    def set_private_key(cls, key_bytes):
+        cls._private_key = key_bytes
 
     @classmethod
-    def clear(cls):
-        if cls.PATH.exists():
-            cls.PATH.unlink()
+    def private_key(cls):
+        return cls._private_key
 
     @classmethod
-    def valid(cls):
-        """Vérifie si la session locale existe et est encore valide côté serveur."""
-        sid = cls.session_id()
-        if not sid:
-            return False
-
-        data = handle_resp(
-            api_post("/session/verify", {"session_id": sid}),
-            required_fields=["username"],
-            context="Session verify"
-        )
-        if data is None:
-            cls.clear()
-
-        return bool(data)
+    def clear_private_key(cls):
+        cls._private_key = None
 
 
 def register_account(args):
@@ -260,6 +273,7 @@ def login_account(args):
         return
 
     # Stockage de l'état du compte pour les prochaines commandes
+    AccountState.set_private_key(private_user_key) # clé privée en mémoire volatile
     AccountState.save(username, session_id, public_key_b64)
 
     #TODO la clé privée déchiffrée doit rester en mémoire et déchiffrer chaque vault key 
