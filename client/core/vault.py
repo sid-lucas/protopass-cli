@@ -40,23 +40,19 @@ def create_vault(args):
         return
 
     # signature de la clé du vault avec la clé privée de l'utilisateur
-    rsa_private = RSA.import_key(private_key)
-    rsa_public = RSA.import_key(public_key)
-
     vault_key_hash = SHA256.new(vault_key).digest()
-    vault_signature = pkcs1_15.new(rsa_private).sign(SHA256.new(vault_key_hash))
+    vault_signature = pkcs1_15.new(RSA.import_key(private_key)).sign(SHA256.new(vault_key_hash))
 
     # chiffre la clé du vault avec la clé publique de l'utilisateur
-    rsa_key = RSA.import_key(rsa_public)
-    cipher = PKCS1_OAEP.new(rsa_key)
+    cipher = PKCS1_OAEP.new(RSA.import_key(public_key))
     vault_key_enc = cipher.encrypt(vault_key)
-    vault_key_enc_b64 = base64.b64encode(vault_key_enc).decode()
 
-    # chiffrement du contenu du vault (nom/entries) avec la clé du vault
-    name_bytes = vault_name.encode()
-    nonce = get_random_bytes(12)
-    cipher_aes = AES.new(vault_key, AES.MODE_GCM, nonce=nonce)
-    name_enc, tag = cipher_aes.encrypt_and_digest(name_bytes)
+    # chiffrement du nom du vault avec la vault_key
+    name_nonce = get_random_bytes(12)
+    cipher_aes = AES.new(vault_key, AES.MODE_GCM, nonce=name_nonce)
+    name_enc, name_tag = cipher_aes.encrypt_and_digest(vault_name.encode())
+
+    # Pas d'items créés pour l'instant
 
     # Envoie les informations du nouveau vault au serveur
     payload = {
@@ -65,8 +61,8 @@ def create_vault(args):
         "signature": base64.b64encode(vault_signature).decode(),
         "name": {
             "name_enc": base64.b64encode(name_enc).decode(),
-            "name_nonce": base64.b64encode(nonce).decode(),
-            "name_tag": base64.b64encode(tag).decode()
+            "name_nonce": base64.b64encode(name_nonce).decode(),
+            "name_tag": base64.b64encode(name_tag).decode()
         },
         "items": []
     }
