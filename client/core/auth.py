@@ -4,9 +4,9 @@ import bcrypt
 import srp
 import re
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Random import get_random_bytes
-from account_state import AccountState
+from .account_state import AccountState
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
 
@@ -25,7 +25,7 @@ def register_account(args):
 
     username = args.username
 
-    if not AccountState.is_valid_username(username):
+    if not is_valid_username(username):
         log_client("error", "Register", "Invalid username. Use 3-20 letters, digits, '-' or '_'.")
         return
         
@@ -122,7 +122,8 @@ def login_account(args):
     if data is None: return
 
     # Réception du sel et clé publique (B) du serveur
-    salt = base64.b64decode(data["salt"])
+    salt_b64 = data["salt"]
+    salt = base64.b64decode(salt_b64)
     B = base64.b64decode(data["B"])
 
     # Validation du challenge
@@ -178,10 +179,9 @@ def login_account(args):
 
     # Stockage de l'état du compte pour les prochaines commandes
     AccountState.set_private_key(private_user_key) # clé privée en mémoire volatile
-    AccountState.save(username, session_id, public_key_b64, private_key_enc_b64, nonce_b64, tag_b64, salt)
-
-    #TODO la clé privée déchiffrée doit rester en mémoire et déchiffrer chaque vault key 
-    # qu'on recevra dans le futur
+    if AccountState.save(username, session_id, public_key_b64, private_key_enc_b64, nonce_b64, tag_b64, salt_b64) is False:
+        log_client("error", "Login", "failed to save account state locally.")
+        return
 
     log_client("info", "Login", f"Login successful, welcome {username}.")
 

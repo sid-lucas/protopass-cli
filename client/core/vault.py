@@ -5,7 +5,12 @@ from core import auth
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Hash import SHA256
+from Crypto.Signature import pkcs1_15
+from Crypto.Random import get_random_bytes
+
 
 def delete_vault(args):
     print("delete")

@@ -3,8 +3,8 @@ import base64
 import json
 import os
 from pathlib import Path
-from client.utils.logger import log_client
-from client.utils.network import api_post, handle_resp
+from utils.logger import log_client
+from utils.network import api_post, handle_resp
 from Crypto.Cipher import AES
 import bcrypt
 
@@ -19,6 +19,7 @@ class AccountState:
     _cached_session_id = None  # idem
     _cached_public_key = None  # idem
     _private_key = None  # Pour des questions de sécurité
+    _vault_keys = {}  # Cache mémoire des clés de vault déchiffrées
 
     PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
 
@@ -70,6 +71,7 @@ class AccountState:
         cls._cached_session_id = None
         cls._cached_public_key = None
         cls.clear_private_key()
+        cls.clear_vault_keys()
 
     # ============================================================
     # Gestion de session et récupération des infos utilisateur
@@ -201,3 +203,27 @@ class AccountState:
 
         cls.set_private_key(decrypted)
         return bytes(cls._private_key) 
+
+    # ============================================================
+    # Gestion des clés de vault (cache mémoire uniquement)
+    # ============================================================
+    @classmethod
+    def set_vault_key(cls, vault_id: str, key_bytes: bytes):
+        cls._vault_keys[vault_id] = bytearray(key_bytes)
+
+    @classmethod
+    def vault_key(cls, vault_id: str):
+        key = cls._vault_keys.get(vault_id)
+        if key is None:
+            return None
+        return bytes(key)
+
+    @classmethod
+    def clear_vault_keys(cls):
+        if not cls._vault_keys:
+            return
+        for value in cls._vault_keys.values():
+            if isinstance(value, bytearray):
+                for idx in range(len(value)):
+                    value[idx] = 0
+        cls._vault_keys.clear()
