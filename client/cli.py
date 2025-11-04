@@ -64,7 +64,6 @@ def build_parser():
     p_vault.set_defaults(func=lambda args: p_vault.print_help())
 
     p_vault_create = vault_sub.add_parser("create", help="Create a new vault")
-    p_vault_create.add_argument("--name", required=True, help="Name of the vault")
     p_vault_create.set_defaults(func=vault.create_vault)
 
     p_vault_delete = vault_sub.add_parser("delete", help="Delete a vault")

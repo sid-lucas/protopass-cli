@@ -20,7 +20,7 @@ def get_user_vaults(username_hash: str) -> list:
     return json.loads(path.read_text())
 
 
-def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, name: dict, items: list):
+def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, name: dict, description: dict | None, created_at: dict | None, items: list):
     vaults = get_user_vaults(username_hash)
 
     if any(vault["vault_id"] == vault_id for vault in vaults):
@@ -31,7 +31,9 @@ def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, n
         "key_enc": key_enc,
         "signature": signature,
         "name": name,
-        "items": items
+        "description": description,
+        "created_at": created_at,
+        "items": items,
     }
 
     vaults.append(new_vault)
