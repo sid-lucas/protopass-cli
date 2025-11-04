@@ -1,8 +1,8 @@
 from flask import Flask, request
 from server.user_store import add_user, get_user
+from server.vault_store import add_vault, get_vault
 from server.session_store import create_session, revoke_session, is_valid, get_session
 import base64, srp
-import os, time
 from functools import wraps
 from server.utils.response import make_resp
 
@@ -45,8 +45,9 @@ def register():
     data = request.get_json(force=True)
 
     try:
+        username = data["username"]
         add_user(
-            data["username"], data["salt"], data["vkey"],
+            username, data["salt"], data["vkey"],
             data["public_key"], data["private_key_enc"], data["nonce"], data["tag"]
         )
     # Erreur données manquantes
@@ -59,7 +60,7 @@ def register():
     # Succès, création de l'utilisateur
     return make_resp(
         "ok", "Register", "user created successfully", 201,
-        data={"username": data["username"]}
+        data={"username": username}
     )
 
 @app.post("/srp/start")
@@ -189,6 +190,32 @@ def get_userkey(username):
 
     return make_resp("ok", "User key", "user key retrieved", 200,
         data={"user_key": user["user_key"]}
+    )
+
+@app.post("/vault/create")
+@require_session
+def create_vault(username):
+    """
+    Crée un nouveau vault pour l'utilisateur authentifié.
+    """
+    data = request.get_json(force=True)
+
+    try:
+        vault_id = data["vault_id"]
+        add_vault(
+            vault_id, data["key_enc"], data["signature"],
+            data["name"], data["items"]
+        )
+    # Erreur données manquantes
+    except KeyError as e:
+        return make_resp("error", "Vault Create", f"missing required fields: {e}", 400)
+    # Erreur utilisateur déjà existant
+    except ValueError as e:
+        return make_resp("error", "Vault Create", str(e), 409)
+
+    # stocke simplement les données reçues concernant le nouveau vault
+    return make_resp("ok", "Vault create", "vault created successfully", 201,
+        data={"vault_id": vault_id}
     )
 
 

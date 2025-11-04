@@ -66,7 +66,7 @@ def create_vault(args):
         },
         "items": []
     }
-    resp = api_post("/vaults/create", payload)
+    resp = api_post("/vault/create", payload)
     data = handle_resp(
         resp,
         required_fields=["vault_id"],
