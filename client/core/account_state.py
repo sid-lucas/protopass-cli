@@ -57,6 +57,7 @@ class AccountState:
         cls._cached_username = None
         cls._cached_session_id = None
         cls._cached_public_key = None
+        cls.clear_private_key()
 
     # ============================================================
     # Gestion de session et récupération des infos utilisateur
@@ -149,6 +150,11 @@ class AccountState:
 
     @classmethod
     def clear_private_key(cls):
+        if cls._private_key is not None:
+            key_obj = cls._private_key
+            if isinstance(key_obj, bytearray):
+                for i in range(len(key_obj)):
+                    key_obj[i] = 0
         cls._private_key = None
 
     @classmethod
