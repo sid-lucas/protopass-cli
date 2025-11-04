@@ -19,7 +19,42 @@ def select_vault(args):
     print("select")
     
 def list_vaults(args):
-    print("list")
+    resp = api_post("/vault/list", {"session_id": auth.AccountState.session_id()})
+    data = handle_resp(
+        resp,
+        required_fields=["vaults"],
+        context="Vault List"
+    )
+    if data is None: return
+    vaults = data["vaults"]
+    if len(vaults) == 0:
+        log_client("info", "Vault List", "No vaults found.")
+        return 
+    
+    for vault in vaults:
+        vault_id = vault.get("vault_id", "unknown")
+        try:
+            # Déchiffrement de la vault_key
+            vault_key_enc = base64.b64decode(vault["key_enc"])
+            private_key = auth.AccountState.private_key()
+            if private_key is None:
+                log_client("error", "Vault List", "No valid private key found in account state (memory).")
+                return
+            vault_key = PKCS1_OAEP.new(RSA.import_key(private_key)).decrypt(vault_key_enc)
+
+            # Déchiffrement du nom du vault
+            name_enc = base64.b64decode(vault["name"]["name_enc"])
+            name_nonce = base64.b64decode(vault["name"]["name_nonce"])
+            name_tag = base64.b64decode(vault["name"]["name_tag"])
+            cipher_aes = AES.new(vault_key, AES.MODE_GCM, nonce=name_nonce)
+            vault_name = cipher_aes.decrypt_and_verify(name_enc, name_tag).decode()
+        except Exception as e:
+            log_client("error", "Vault List", f"Failed to decrypt vault '{vault_id[:8]}...': {e}")
+            continue
+
+        log_client("info", "Vault List", f"Name: '{vault_name}', Vault ID: {vault_id[:8]}...")
+
+    print("END OF LIST")
 
 def create_vault(args):
 
@@ -75,4 +110,4 @@ def create_vault(args):
     )
     if data is None: return
 
-    print("vault created")
+    log_client("info", "Vault Create", f"Vault '{vault_id[:8]}' created successfully.")

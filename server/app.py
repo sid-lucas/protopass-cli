@@ -1,6 +1,6 @@
 from flask import Flask, request
 from server.user_store import add_user, get_user
-from server.vault_store import add_vault
+from server.vault_store import add_vault, get_user_vaults
 from server.session_store import create_session, revoke_session, is_valid, get_session
 import base64, srp
 from functools import wraps
@@ -175,7 +175,7 @@ def logout_session():
 
     # Supprime la session côté serveur et informe le client
     revoke_session(token)
-    return make_resp("ok", "Session logout", f"Session {token[:10]}... revoked", 200)
+    return make_resp("ok", "Session logout", f"Session {token[:8]}... revoked", 200)
 
 @app.post("/userkey")
 @require_session
@@ -214,9 +214,20 @@ def create_vault(username):
         return make_resp("error", "Vault Create", str(e), 409)
 
     # stocke simplement les données reçues concernant le nouveau vault
-    return make_resp("ok", "Vault create", "vault created successfully", 201,
+    return make_resp("ok", "Vault create", f"Vault {vault_id[:8]}... created successfully", 201,
         data={"vault_id": vault_id}
     )
+
+@app.post("/vault/list")
+@require_session
+def list_vaults(username):
+    """
+    Retourne tous les vaults chiffrés associés à l'utilisateur.
+    """
+    vaults = get_user_vaults(username)
+    vaults_count = len(vaults)
+    return make_resp("ok", "Vault List", f"{vaults_count} vault(s) retrieved", 200, data={"vaults": vaults})
+
 
 
 # ============================================================
