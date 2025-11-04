@@ -1,131 +1,17 @@
 import getpass
+import base64
+import bcrypt
 import srp
-import hashlib, base64
-import requests
-import json
-from pathlib import Path
+import re
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
-import bcrypt
+from account_state import AccountState
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
-import re
-
-
-class AccountState:
-    """
-    Stocke l'état local du compte : informations persistantes associées à l'utilisateur
-    (username, session_id volatile, clé publique, etc.).
-    """
-
-    # Champs mémoire volatile (non sauvegardés) utile pour le shell interactif
-    _private_key = None  # Pour des questions de sécurité
-    _cached_username = None  # Pour des questions de performance (évite de relire le fichier à chaque fois)
-    _cached_session_id = None  # idem
-    _cached_public_key = None  # idem
-
-    PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
-
-    @classmethod
-    def _read(cls):
-        if not cls.PATH.exists():
-            return None
-        try:
-            return json.loads(cls.PATH.read_text())
-        except Exception:
-            return None
-
-    @classmethod
-    def save(cls, username, session_id, public_key):
-        cls.PATH.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "username": username,
-            "session_id": session_id,
-            "public_key": public_key
-        }
-        cls.PATH.write_text(json.dumps(payload, indent=2))
-        cls._cached_username = username
-        cls._cached_session_id = session_id
-        cls._cached_public_key = public_key
-
-    @classmethod
-    def clear(cls):
-        if cls.PATH.exists():
-            cls.PATH.unlink()
-        cls._cached_username = None
-        cls._cached_session_id = None
-        cls._cached_public_key = None
-
-    @classmethod
-    def valid(cls):
-        """Vérifie si la session locale existe et est encore valide côté serveur."""
-        sid = cls.session_id()
-        if not sid:
-            return False
-
-        data = handle_resp(
-            api_post("/session/verify", {"session_id": sid}),
-            required_fields=["username"],
-            context="Session verify"
-        )
-        if data is None:
-            cls.clear()
-
-        return bool(data)
-
-    @classmethod
-    def username(cls):
-        if cls._cached_username is not None:
-            return cls._cached_username
-        data = cls._read()
-        if not data:
-            return None
-        cls._cached_username = data.get("username")
-        return cls._cached_username
-
-    @classmethod
-    def session_id(cls):
-        if cls._cached_session_id is not None:
-            return cls._cached_session_id
-        data = cls._read()
-        if not data:
-            return None
-        cls._cached_session_id = data.get("session_id")
-        return cls._cached_session_id
-
-    @classmethod
-    def public_key(cls):
-        if cls._cached_public_key is not None:
-            return cls._cached_public_key
-        data = cls._read()
-        if not data:
-            return None
-        public_key_b64 = data.get("public_key")
-        if not public_key_b64:
-            return None
-        try:
-            cls._cached_public_key = base64.b64decode(public_key_b64)
-            return cls._cached_public_key
-        except (ValueError, TypeError):
-            log_client("error", "AccountState", "invalid public key encoding in account_state.json")
-            return None
-
-    @classmethod
-    def set_private_key(cls, key_bytes):
-        cls._private_key = key_bytes
-
-    @classmethod
-    def private_key(cls):
-        return cls._private_key
-
-    @classmethod
-    def clear_private_key(cls):
-        cls._private_key = None
 
 def is_valid_username(username):
     return re.fullmatch(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{1,18}[a-zA-Z0-9])?$", username) is not None
-
 
 def register_account(args):
     """
@@ -139,7 +25,7 @@ def register_account(args):
 
     username = args.username
 
-    if not is_valid_username(username):
+    if not AccountState.is_valid_username(username):
         log_client("error", "Register", "Invalid username. Use 3-20 letters, digits, '-' or '_'.")
         return
         
@@ -207,7 +93,7 @@ def login_account(args):
         return
 
     username = args.username
-    password = getpass.getpass(f"Enter your password of '{username}': ")
+    password = getpass.getpass(f"Enter the password of '{username}': ")
 
     # Création de l'objet SRP côté client
     usr = srp.User(
@@ -286,25 +172,13 @@ def login_account(args):
     nonce = base64.b64decode(nonce_b64)
     tag = base64.b64decode(tag_b64)
 
-
-    # Déchiffrement de la clé privée user key avec la clé dérivée bcrypt
-    try:
-        # Dérivation de la clé AES via bcrypt
-        aes_key = bcrypt.kdf(
-            password=password.encode(),
-            salt=salt,
-            desired_key_bytes=32,
-            rounds=200  # facteur de coût (à partir de 200 pour de la sécurité basique)
-        )
-        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-        private_user_key = cipher.decrypt_and_verify(private_key_enc, tag)
-    except ValueError:
-        log_client("error", "Login", "unable to decrypt user key (possible causes: invalid password, corrupted data, or mismatched salt).")
+    private_user_key = AccountState._decrypt_private_key(password, private_key_enc, nonce, tag, salt)
+    if private_user_key is None:
         return
 
     # Stockage de l'état du compte pour les prochaines commandes
     AccountState.set_private_key(private_user_key) # clé privée en mémoire volatile
-    AccountState.save(username, session_id, public_key_b64)
+    AccountState.save(username, session_id, public_key_b64, private_key_enc_b64, nonce_b64, tag_b64, salt)
 
     #TODO la clé privée déchiffrée doit rester en mémoire et déchiffrer chaque vault key 
     # qu'on recevra dans le futur
