@@ -147,7 +147,7 @@ class AccountState:
             cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
             return cipher.decrypt_and_verify(private_key_enc, tag)
         except Exception as e:
-            log_client("error", "Decrypt", f"unable to decrypt user key: {e}")
+            log_client("error", "Decrypt", f"unable to decrypt: {e}")
             return None
 
     @classmethod
@@ -174,9 +174,6 @@ class AccountState:
         """
         Si la private_key n'est plus en mémoire, redemande le mot de passe pour la déchiffrer localement.
         """
-        if cls._private_key is not None:
-            return bytes(cls._private_key) 
-
         data = cls._read()
         if not data:
             log_client("error", "AccountState", "no local account state found.")
