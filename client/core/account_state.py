@@ -1,6 +1,7 @@
-import base64
 import getpass
+import base64
 import json
+import os
 from pathlib import Path
 from client.utils.logger import log_client
 from client.utils.network import api_post, handle_resp
@@ -45,10 +46,21 @@ class AccountState:
             "tag": tag,
             "salt": salt
         }
-        cls.PATH.write_text(json.dumps(payload, indent=2))
+        # Écriture atomique du fichier avec permissions restreintes
+        try:
+            payload_json = json.dumps(payload, indent=2)
+            fd = os.open(str(cls.PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload_json)
+        except Exception as e:
+            log_client("error", "AccountState", f"unable to persist account state: {e}")
+            return False
+        
+        # Mise à jour du cache mémoire
         cls._cached_username = username
         cls._cached_session_id = session_id
         cls._cached_public_key = public_key
+        return True
 
     @classmethod
     def clear(cls):
@@ -112,8 +124,8 @@ class AccountState:
         try:
             cls._cached_public_key = base64.b64decode(public_key_b64)
             return cls._cached_public_key
-        except (ValueError, TypeError):
-            log_client("error", "AccountState", "invalid public key encoding in account_state.json")
+        except Exception as e:
+            log_client("error", "AccountState", f"invalid public key encoding in account_state.json: {e}")
             return None
         
     # ============================================================
@@ -140,12 +152,12 @@ class AccountState:
 
     @classmethod
     def set_private_key(cls, key_bytes):
-        cls._private_key = key_bytes
+        cls._private_key = bytearray(key_bytes)
 
     @classmethod
     def private_key(cls):
         if cls._private_key is not None:
-            return cls._private_key
+            return bytes(cls._private_key) 
         return cls._load_private_key_in_mem()
 
     @classmethod
@@ -162,8 +174,8 @@ class AccountState:
         """
         Si la private_key n'est plus en mémoire, redemande le mot de passe pour la déchiffrer localement.
         """
-        if cls._private_key() is not None:
-            return cls._private_key()
+        if cls._private_key is not None:
+            return bytes(cls._private_key) 
 
         data = cls._read()
         if not data:
@@ -191,4 +203,4 @@ class AccountState:
             return None
 
         cls.set_private_key(decrypted)
-        return decrypted
+        return bytes(cls._private_key) 
