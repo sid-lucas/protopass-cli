@@ -9,6 +9,7 @@ from Crypto.Random import get_random_bytes
 from .account_state import AccountState
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
+import hashlib
 
 def is_valid_username(username):
     return re.fullmatch(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{1,18}[a-zA-Z0-9])?$", username) is not None
@@ -24,6 +25,7 @@ def register_account(args):
         return
 
     username = args.username
+    username_hash = hashlib.sha256(username.encode()).hexdigest()
 
     if not is_valid_username(username):
         log_client("error", "Register", "Invalid username. Use 3-20 letters, digits, '-' or '_'.")
@@ -36,7 +38,7 @@ def register_account(args):
 
     # Générer (salt + verifier) selon SRP
     salt, vkey = srp.create_salted_verification_key(
-        username, password,
+        username_hash, password,
         hash_alg=srp.SHA256,
         ng_type=srp.NG_2048
     )
@@ -65,7 +67,7 @@ def register_account(args):
 
     # Envoie du nouvel utilisateur au serveur
     payload = {
-        "username": username,
+        "username": username_hash,
         "salt": salt_b64,
         "vkey": vkey_b64,
         "public_key": base64.b64encode(public_user_key).decode(),
@@ -93,11 +95,12 @@ def login_account(args):
         return
 
     username = args.username
+    username_hash = hashlib.sha256(username.encode()).hexdigest()
     password = getpass.getpass(f"Enter the password of '{username}': ")
 
     # Création de l'objet SRP côté client
     usr = srp.User(
-        username.encode(),
+        username_hash.encode(),
         password.encode(),
         hash_alg=srp.SHA256,
         ng_type=srp.NG_2048
@@ -111,7 +114,7 @@ def login_account(args):
 
     # Envoi au serveur le username et la clé publique (A)
     payload = {
-        "username": username,
+        "username": username_hash,
         "A": base64.b64encode(A).decode()
     }
     data = handle_resp(
@@ -131,7 +134,7 @@ def login_account(args):
 
     # Envoi au serveur du challenge complété (M)
     payload = {
-        "username": username,
+        "username": username_hash,
         "M": base64.b64encode(M).decode()
     }
     data = handle_resp(

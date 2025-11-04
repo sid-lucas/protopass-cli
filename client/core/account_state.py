@@ -42,7 +42,7 @@ class AccountState:
             "username": username,
             "session_id": session_id,
             "public_key": public_key,
-            "private_key": private_key_enc,
+            "private_key_enc": private_key_enc,
             "nonce": nonce,
             "tag": tag,
             "salt": salt
@@ -60,7 +60,7 @@ class AccountState:
         # Mise à jour du cache mémoire
         cls._cached_username = username
         cls._cached_session_id = session_id
-        cls._cached_public_key = public_key
+        cls._cached_public_key = base64.b64decode(public_key)
         return True
 
     @classmethod
@@ -181,7 +181,7 @@ class AccountState:
             log_client("error", "AccountState", "no local account state found.")
             return None
 
-        for key in ["private_key", "nonce", "tag", "salt"]:
+        for key in ["private_key_enc", "nonce", "tag", "salt"]:
             if key not in data:
                 log_client("error", "AccountState", f"missing field '{key}' in local account state.")
                 return None
@@ -189,7 +189,7 @@ class AccountState:
         password = getpass.getpass("Enter your password: ")
 
         try:
-            private_key_enc = base64.b64decode(data["private_key"])
+            private_key_enc = base64.b64decode(data["private_key_enc"])
             nonce = base64.b64decode(data["nonce"])
             tag = base64.b64decode(data["tag"])
             salt = base64.b64decode(data["salt"])

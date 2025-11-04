@@ -1,6 +1,6 @@
 from flask import Flask, request
 from server.user_store import add_user, get_user
-from server.vault_store import add_vault, get_vault
+from server.vault_store import add_vault
 from server.session_store import create_session, revoke_session, is_valid, get_session
 import base64, srp
 from functools import wraps
@@ -203,7 +203,7 @@ def create_vault(username):
     try:
         vault_id = data["vault_id"]
         add_vault(
-            vault_id, data["key_enc"], data["signature"],
+            username, vault_id, data["key_enc"], data["signature"],
             data["name"], data["items"]
         )
     # Erreur données manquantes

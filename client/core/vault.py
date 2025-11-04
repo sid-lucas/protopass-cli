@@ -56,6 +56,7 @@ def create_vault(args):
 
     # Envoie les informations du nouveau vault au serveur
     payload = {
+        "session_id": auth.AccountState.session_id(),
         "vault_id": vault_id,
         "key_enc": base64.b64encode(vault_key_enc).decode(),
         "signature": base64.b64encode(vault_signature).decode(),
