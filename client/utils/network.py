@@ -25,23 +25,25 @@ def api_post(endpoint, payload=None, user=None):
     
     url = f"{SERVER_URL}{endpoint}"
 
+    logger = log.get_logger(CTX.NETWORK, user)
+
     try:
-        log.info(CTX.NETWORK, f"sending POST {endpoint}", user=user)
+        logger.debug(f"Sending POST {endpoint}")
         resp = requests.post(url, json=payload or {})
-        log.info(CTX.NETWORK, f"received {resp.status_code} from {endpoint}", user=user)
+        logger.debug(f"Received {resp.status_code} from {endpoint}")
         #resp.raise_for_status()
         return resp
 
     except requests.exceptions.ConnectionError:
-        log.error(CTX.NETWORK, f"unable to connect to {url}", user=user)
+        logger.error(f"unable to connect to {url}")
         return None
 
     except requests.exceptions.Timeout:
-        log.error(CTX.NETWORK, f"request to {url} timed out", user=user)
+        logger.error(f"request to {url} timed out")
         return None
 
     except requests.exceptions.RequestException as e:
-        log.error(CTX.NETWORK, f"request error on {url}: {e}", user=user)
+        logger.error(f"request error on {url}: {e}")
         return None
 
 
@@ -59,35 +61,39 @@ def handle_resp(resp, required_fields=None, context=CTX.NETWORK, user=None):
         dict or None: Les données extraites de la réponse si succès et champs requis présents, sinon None.
     """
 
+    logger = log.get_logger(context, user)
+
     if resp is None:
-        log.error(context, "no response received", user=user)
+        logger.error("No response received")
         return None
 
     # Décodage JSON
     try:
         payload = resp.json()
     except Exception as e:
-        log.error(context, f"invalid JSON response: {e}", user=user)
+        logger.error(f"Invalid JSON response: {e}")
         return None
 
-    status = payload.get("status")
+    payload_context = payload.get("context", context)
+    logger = log.get_logger(payload_context, user)
 
+    status = payload.get("status")
     if status == "error":
-        log.error(payload.get("context", context), payload.get("message", "unknown server error"), user=user)
+        logger.error(payload.get("message", "unknown server error"))
         return None
 
     if status == "ok":
-        log.info(payload.get("context", context), payload.get("message", "operation successful"), user=user)
+        logger.info(payload.get("message", "operation successful"))
         data = payload.get("data", {})
 
         # Vérifie les champs requis uniquement en cas de succès
         if required_fields:
             missing = [f for f in required_fields if f not in data]
             if missing:
-                log.error(payload.get("context", context), f"missing fields in response data: {missing}", user=user)
+                logger.error(f"Missing fields in response data: {missing}")
                 return None
 
         return data
 
-    log.error(context, "invalid response status", user=user)
+    logger.error("Invalid response status")
     return None

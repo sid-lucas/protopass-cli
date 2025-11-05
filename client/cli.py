@@ -9,6 +9,10 @@ class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         raise ValueError(message)
 
+# TODO : attribuer les bon level au log :
+# - mettre un log a chaque return cassant la fonction (error ou warning)
+# - vérifier pour chaque level "info" si ce serait pas plutot un "debug"
+
 
 SESSION_OPTIONAL_COMMANDS = {"login", "register", "shell"}
 

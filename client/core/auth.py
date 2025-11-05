@@ -25,7 +25,7 @@ def register_account(args):
 
     # vérifie qu'on est pas déjà connecté
     if AccountState.valid():
-        logger.info("User is already logged in.")
+        logger.warning("User is already logged in.")
         notify_user("You are already logged in.")
         return
 
@@ -102,7 +102,7 @@ def login_account(args):
 
     # Vérifie si une session locale est déjà active
     if AccountState.valid():
-        logger.info("User is already logged in.")
+        logger.warning("User is already logged in.")
         notify_user("You are already logged in.")
         return
 

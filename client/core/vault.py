@@ -15,22 +15,24 @@ from Crypto.Signature import pkcs1_15
 from Crypto.Random import get_random_bytes
 
 def _prompt_field(label, max_len, allow_empty=False):
+    logger = log.get_logger(CTX.VAULT_CREATE, auth.AccountState.username())
     while True:
         value = input(f"{label} (max {max_len} chars): ").strip()
         if not value and allow_empty:
             return None
         if not value:
-            log.error(CTX.VAULT_CREATE, "Tried an empty field.", user=auth.AccountState.username())
+            logger.warning(f"Empty value provided for '{label}'")
             notify_user("This field cannot be empty.")
             continue
         if len(value) > max_len:
-            log.error(CTX.VAULT_CREATE, f"Field must be ≤ {max_len} characters.", user=auth.AccountState.username())
+            logger.warning(f"Value for '{label}' exceeds {max_len} characters")
             notify_user(f"Value must be ≤ {max_len} characters.")
             continue
         return value
 
 def _fetch_vault_rows():
     current_user = auth.AccountState.username()
+    logger = log.get_logger(CTX.VAULT_LIST, current_user)
     resp = api_post("/vault/list", {"session_id": auth.AccountState.session_id()}, user=current_user)
     data = handle_resp(
         resp,
@@ -43,13 +45,13 @@ def _fetch_vault_rows():
         return None
     vaults = data["vaults"]
     if len(vaults) == 0:
-        log.info(CTX.VAULT_LIST, "No vaults found.", user=current_user)
+        logger.info("No vaults found.")
         notify_user("No vaults found.")
         return None
     
     private_key = auth.AccountState.private_key()
     if private_key is None:
-        log.error(CTX.VAULT_LIST, "No valid private key found in account state (memory).", user=current_user)
+        logger.error("No valid private key in account state (memory).")
         notify_user("Unable to decrypt vaults with current keys.")
         return None
     rsa_cipher = PKCS1_OAEP.new(RSA.import_key(private_key))
@@ -68,7 +70,7 @@ def _fetch_vault_rows():
             created_at = decrypt_metadata(vault.get("created_at"), vault_key)
 
         except Exception as e:
-            log.error(CTX.VAULT_LIST, f"Failed to decrypt vault '{vault_id[:8]}...': {e}", user=current_user)
+            logger.warning(f"Failed to decrypt vault '{vault_id[:8]}' ({e})")
             continue
 
         rows.append({
@@ -105,7 +107,7 @@ def decrypt_metadata(blob: dict | None, key: bytes) -> str | None:
         cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
         return cipher.decrypt_and_verify(enc, tag).decode()
     except Exception as err:
-        log.error(CTX.VAULT_LIST, f"Failed to decrypt metadata: {err}", user=auth.AccountState.username())
+        log.error(CTX.VAULT_LIST, f"Failed to decrypt metadata: {err}", auth.AccountState.username())
         return None
 
 
@@ -116,6 +118,7 @@ def delete_vault(args):
         return
     
     vault_id_to_del = None
+    logger = log.get_logger(CTX.VAULT_DELETE, auth.AccountState.username())
     
     for row in rows:
         if row.get("idx") == str(args.index):
@@ -124,7 +127,8 @@ def delete_vault(args):
 
     if vault_id_to_del is None:
         notify_user(f"No vault found for index '{args.index}'")
-        log.error(CTX.VAULT_DELETE, f"No vault associated with index '{args.index}', deletion aborted", user=auth.AccountState.username())
+        logger.error(f"No vault associated with index '{args.index}', deletion aborted")
+        return
 
     notify_user(f"found vault id to del : {vault_id_to_del}")
 
@@ -150,6 +154,7 @@ def list_vaults(_args):
 
 def create_vault(_args):
     current_user = auth.AccountState.username()
+    logger = log.get_logger(CTX.VAULT_CREATE, current_user)
 
     vault_name = _prompt_field("Vault name", 15)
     description = _prompt_field("Description", 40, allow_empty=True)
@@ -162,13 +167,11 @@ def create_vault(_args):
 
     public_key = auth.AccountState.public_key()
     if public_key is None:
-        log.error(CTX.VAULT_CREATE, "No valid public key found in account state.", user=current_user)
-        notify_user("No valid public key found. Please log in again.")
+        logger.error("No valid public key found in account state.")
         return
     private_key = auth.AccountState.private_key()
     if private_key is None:
-        log.error(CTX.VAULT_CREATE, "No valid private key found in account state (memory).", user=current_user)
-        notify_user("No valid private key in memory. Please unlock your account.")
+        logger.error("No valid private key found in account state (memory).")
         return
 
     # signature de la clé du vault avec la clé privée de l'utilisateur
@@ -188,7 +191,7 @@ def create_vault(_args):
 
     session_id = auth.AccountState.session_id()
     if session_id is None:
-        log.error(CTX.VAULT_CREATE, "No valid session ID found in account state.", user=current_user)
+        logger.error("No valid session ID found in account state.")
         notify_user("No active session. Please log in.")
         return
     # Envoie les informations du nouveau vault au serveur
@@ -213,4 +216,5 @@ def create_vault(_args):
         notify_user("Vault creation failed. See logs for details.")
         return
 
+    logger.info("Vault '%s' created (id=%s)", vault_name, vault_id[:8])
     notify_user(f"Vault '{vault_name}' created successfully.")
