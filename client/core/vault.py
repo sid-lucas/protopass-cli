@@ -5,7 +5,7 @@ from core import auth
 from datetime import datetime, timezone
 from utils.display import render_table, format_timestamp
 from utils.network import api_post, handle_resp
-from utils.logger import log_client
+from utils.logger import log_client, notify_user
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_OAEP
@@ -19,10 +19,12 @@ def _prompt_field(label, max_len, allow_empty=False):
         if not value and allow_empty:
             return None
         if not value:
-            log_client("error", "Vault Create", "This field cannot be empty.")
+            log_client("error", "Vault Create", "Tried an empty field.", user=auth.AccountState.username())
+            notify_user("This field cannot be empty.")
             continue
         if len(value) > max_len:
-            log_client("error", "Vault Create", f"Must be ≤ {max_len} characters.")
+            log_client("error", "Vault Create", f"Field must be ≤ {max_len} characters.", user=auth.AccountState.username())
+            notify_user(f"Value must be ≤ {max_len} characters.")
             continue
         return value
 
@@ -50,7 +52,7 @@ def decrypt_metadata(blob: dict | None, key: bytes) -> str | None:
         cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
         return cipher.decrypt_and_verify(enc, tag).decode()
     except Exception as err:
-        log_client("error", "Vault List", f"Failed to decrypt metadata: {err}")
+        log_client("error", "Vault List", f"Failed to decrypt metadata: {err}", user=auth.AccountState.username())
         return None
 
 def delete_vault(args):
@@ -60,21 +62,27 @@ def select_vault(args):
     print("select")
     
 def list_vaults(_args):
-    resp = api_post("/vault/list", {"session_id": auth.AccountState.session_id()})
+    current_user = auth.AccountState.username()
+    resp = api_post("/vault/list", {"session_id": auth.AccountState.session_id()}, user=current_user)
     data = handle_resp(
         resp,
         required_fields=["vaults"],
-        context="Vault List"
+        context="Vault List",
+        user=current_user
     )
-    if data is None: return
+    if data is None:
+        notify_user("Unable to retrieve vault list. See logs for details.")
+        return
     vaults = data["vaults"]
     if len(vaults) == 0:
-        log_client("info", "Vault List", "No vaults found.")
+        log_client("info", "Vault List", "No vaults found.", user=current_user)
+        notify_user("No vaults found.")
         return 
     
     private_key = auth.AccountState.private_key()
     if private_key is None:
-        log_client("error", "Vault List", "No valid private key found in account state (memory).")
+        log_client("error", "Vault List", "No valid private key found in account state (memory).", user=current_user)
+        notify_user("Unable to decrypt vaults with current keys.")
         return
     rsa_cipher = PKCS1_OAEP.new(RSA.import_key(private_key))
     
@@ -92,14 +100,14 @@ def list_vaults(_args):
             created_at = decrypt_metadata(vault.get("created_at"), vault_key)
 
         except Exception as e:
-            log_client("error", "Vault List", f"Failed to decrypt vault '{vault_id[:8]}...': {e}")
+            log_client("error", "Vault List", f"Failed to decrypt vault '{vault_id[:8]}...': {e}", user=current_user)
             continue
 
         rows.append({
             "idx": str(len(rows) + 1),
             "name": vault_name or "-",
-            "desc": description or "-",
-            "created": format_timestamp(created_at) or "-",
+            "desc": description or "(no description)",
+            "created": format_timestamp(created_at),
         })
 
         #log_client("info", "Vault List", f"Name: '{vault_name}', Vault ID: {vault_id[:8]}...")
@@ -113,6 +121,7 @@ def list_vaults(_args):
     print(render_table(rows, columns))
 
 def create_vault(_args):
+    current_user = auth.AccountState.username()
 
     vault_name = _prompt_field("Vault name", 15)
     description = _prompt_field("Description", 40, allow_empty=True)
@@ -125,11 +134,13 @@ def create_vault(_args):
 
     public_key = auth.AccountState.public_key()
     if public_key is None:
-        log_client("error", "Vault Create", "No valid public key found in account state.")
+        log_client("error", "Vault Create", "No valid public key found in account state.", user=current_user)
+        notify_user("No valid public key found. Please log in again.")
         return
     private_key = auth.AccountState.private_key()
     if private_key is None:
-        log_client("error", "Vault Create", "No valid private key found in account state (memory).")
+        log_client("error", "Vault Create", "No valid private key found in account state (memory).", user=current_user)
+        notify_user("No valid private key in memory. Please unlock your account.")
         return
 
     # signature de la clé du vault avec la clé privée de l'utilisateur
@@ -149,7 +160,8 @@ def create_vault(_args):
 
     session_id = auth.AccountState.session_id()
     if session_id is None:
-        log_client("error", "Vault Create", "No valid session ID found in account state.")
+        log_client("error", "Vault Create", "No valid session ID found in account state.", user=current_user)
+        notify_user("No active session. Please log in.")
         return
     # Envoie les informations du nouveau vault au serveur
     payload = {
@@ -162,10 +174,15 @@ def create_vault(_args):
         "created_at": time_blob,
         "items": []
     }
-    resp = api_post("/vault/create", payload)
+    resp = api_post("/vault/create", payload, user=current_user)
     data = handle_resp(
         resp,
         required_fields=["vault_id"],
-        context="Vault Create"
+        context="Vault Create",
+        user=current_user
     )
-    if data is None: return
+    if data is None:
+        notify_user("Vault creation failed. See logs for details.")
+        return
+
+    notify_user(f"Vault '{vault_name}' created successfully.")
