@@ -1,5 +1,6 @@
 import requests
-from utils.logger import log_client
+from utils import logger as log
+from utils.logger import CTX
 
 SERVER_URL = "http://127.0.0.1:5000"
 
@@ -25,26 +26,26 @@ def api_post(endpoint, payload=None, user=None):
     url = f"{SERVER_URL}{endpoint}"
 
     try:
-        log_client("info", "Network", f"sending POST {endpoint}", user=user)
+        log.info(CTX.NETWORK, f"sending POST {endpoint}", user=user)
         resp = requests.post(url, json=payload or {})
-        log_client("info", "Network", f"received {resp.status_code} from {endpoint}", user=user)
+        log.info(CTX.NETWORK, f"received {resp.status_code} from {endpoint}", user=user)
         #resp.raise_for_status()
         return resp
 
     except requests.exceptions.ConnectionError:
-        log_client("error", "Network", f"unable to connect to {url}", user=user)
+        log.error(CTX.NETWORK, f"unable to connect to {url}", user=user)
         return None
 
     except requests.exceptions.Timeout:
-        log_client("error", "Network", f"request to {url} timed out", user=user)
+        log.error(CTX.NETWORK, f"request to {url} timed out", user=user)
         return None
 
     except requests.exceptions.RequestException as e:
-        log_client("error", "Network", f"request error on {url}: {e}", user=user)
+        log.error(CTX.NETWORK, f"request error on {url}: {e}", user=user)
         return None
 
 
-def handle_resp(resp, required_fields=None, context="Server", user=None):
+def handle_resp(resp, required_fields=None, context=CTX.NETWORK, user=None):
     """
     Analyse et logue la réponse serveur normalisée.
 
@@ -59,34 +60,34 @@ def handle_resp(resp, required_fields=None, context="Server", user=None):
     """
 
     if resp is None:
-        log_client("error", context, "no response received", user=user)
+        log.error(context, "no response received", user=user)
         return None
 
     # Décodage JSON
     try:
         payload = resp.json()
     except Exception as e:
-        log_client("error", context, f"invalid JSON response: {e}", user=user)
+        log.error(context, f"invalid JSON response: {e}", user=user)
         return None
 
     status = payload.get("status")
 
     if status == "error":
-        log_client("error", payload.get("context", context), payload.get("message", "unknown server error"), user=user)
+        log.error(payload.get("context", context), payload.get("message", "unknown server error"), user=user)
         return None
 
     if status == "ok":
-        log_client("info", payload.get("context", context), payload.get("message", "operation successful"), user=user)
+        log.info(payload.get("context", context), payload.get("message", "operation successful"), user=user)
         data = payload.get("data", {})
 
         # Vérifie les champs requis uniquement en cas de succès
         if required_fields:
             missing = [f for f in required_fields if f not in data]
             if missing:
-                log_client("error", payload.get("context", context), f"missing fields in response data: {missing}", user=user)
+                log.error(payload.get("context", context), f"missing fields in response data: {missing}", user=user)
                 return None
 
         return data
 
-    log_client("error", context, "invalid response status", user=user)
+    log.error(context, "invalid response status", user=user)
     return None

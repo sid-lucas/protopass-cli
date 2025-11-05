@@ -1,6 +1,26 @@
 import logging
+from enum import Enum
 from pathlib import Path
 
+
+class LogContext(str, Enum):
+    NETWORK = "Network"
+    REGISTER = "Register"
+    LOGIN = "Login"
+    LOGOUT = "Logout"
+    SRP_START = "SRP start"
+    SRP_VERIFY = "SRP verify"
+    FETCH_USER_KEY = "Fetch user key"
+    VAULT_LIST = "Vault List"
+    VAULT_CREATE = "Vault Create"
+    VAULT_DELETE = "Vault Delete"
+    ACCOUNT_STATE = "AccountState"
+    SESSION = "Session"
+    SESSION_VERIFY = "Session verify"
+    DECRYPT = "Decrypt"
+
+
+CTX = LogContext
 
 
 # ============================================================
@@ -52,16 +72,67 @@ def _resolve_username(explicit_user: str | None) -> str | None:
 
 
 # ============================================================
+# Logger adapter
+# ============================================================
+class _ContextLoggerAdapter(logging.LoggerAdapter):
+    """
+    Enrichit systématiquement les logs avec un contexte et un utilisateur.
+    """
+
+    def process(self, msg, kwargs):
+        extra = kwargs.setdefault("extra", {})
+
+        # Contexte : priorité au kwargs, sinon à la valeur fournie lors de l'init.
+        if "context" not in extra and "context" in self.extra:
+            extra["context"] = self.extra["context"]
+
+        # Utilisateur : kwargs > adapter > résolution automatique.
+        user = extra.get("user", self.extra.get("user"))
+        if user is None or user == "-":
+            user = _resolve_username(None)
+        extra["user"] = user or "-"
+
+        return msg, kwargs
+
+
+# ============================================================
+# API utilitaire
+# ============================================================
+def get_logger(context: str, user: str | None = None) -> logging.LoggerAdapter:
+    """Retourne un logger prêt à l'emploi pour un contexte donné."""
+    context_value = context.value if isinstance(context, LogContext) else str(context)
+    return _ContextLoggerAdapter(_logger, {"context": context_value, "user": user})
+
+
+# ============================================================
 # Public API
 # ============================================================
-def log_client(level: str, context: str, message: str, user: str | None = None) -> None:
-    """
-    Écrit un message dans le journal client (fichier).
-    """
-    log_level = getattr(logging, level.upper(), logging.INFO)
-    resolved_user = _resolve_username(user) or "-"
-    extra = {"context": context, "user": resolved_user}
-    _logger.log(log_level, message, extra=extra)
+def _log(level: int, context: str, message: str, user: str | None = None, **kwargs) -> None:
+    get_logger(context, user).log(level, message, **kwargs)
+
+def log_client(level: str, context: str, message: str, user: str | None = None, **kwargs) -> None:
+    """Compat helper (utilisé durant la migration)."""
+    level_value = getattr(logging, level.upper(), logging.INFO)
+    _log(level_value, context, message, user=user, **kwargs)
+
+def debug(context: str, message: str, user: str | None = None, **kwargs) -> None:
+    _log(logging.DEBUG, context, message, user=user, **kwargs)
+
+
+def info(context: str, message: str, user: str | None = None, **kwargs) -> None:
+    _log(logging.INFO, context, message, user=user, **kwargs)
+
+
+def warning(context: str, message: str, user: str | None = None, **kwargs) -> None:
+    _log(logging.WARNING, context, message, user=user, **kwargs)
+
+
+def error(context: str, message: str, user: str | None = None, **kwargs) -> None:
+    _log(logging.ERROR, context, message, user=user, **kwargs)
+
+
+def critical(context: str, message: str, user: str | None = None, **kwargs) -> None:
+    _log(logging.CRITICAL, context, message, user=user, **kwargs)
 
 
 def notify_user(message: str) -> None:

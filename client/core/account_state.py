@@ -3,7 +3,8 @@ import base64
 import json
 import os
 from pathlib import Path
-from utils.logger import log_client
+from utils import logger as log
+from utils.logger import CTX
 from utils.network import api_post, handle_resp
 from Crypto.Cipher import AES
 import bcrypt
@@ -54,7 +55,7 @@ class AccountState:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload_json)
         except Exception as e:
-            log_client("error", "AccountState", f"unable to persist account state: {e}", user=username)
+            log.error(CTX.ACCOUNT_STATE, f"unable to persist account state: {e}", user=username)
             return False
         
         # Mise à jour du cache mémoire
@@ -64,7 +65,7 @@ class AccountState:
             cls._cached_public_key = base64.b64decode(public_key)
         except Exception as e:
             cls._cached_public_key = None
-            log_client("error", "AccountState", f"unable to cache public key: {e}", user=username)
+            log.error(CTX.ACCOUNT_STATE, f"unable to cache public key: {e}", user=username)
         return True
 
     @classmethod
@@ -91,7 +92,7 @@ class AccountState:
         data = handle_resp(
             api_post("/session/verify", {"session_id": sid}, user=current_user),
             required_fields=["username"],
-            context="Session verify",
+            context=CTX.SESSION_VERIFY,
             user=current_user
         )
         if data is None:
@@ -133,7 +134,7 @@ class AccountState:
             cls._cached_public_key = base64.b64decode(public_key_b64)
             return cls._cached_public_key
         except Exception as e:
-            log_client("error", "AccountState", f"invalid public key encoding in account_state.json: {e}", user=cls._cached_username)
+            log.error(CTX.ACCOUNT_STATE, f"invalid public key encoding in account_state.json: {e}", user=cls._cached_username)
             return None
         
     # ============================================================
@@ -155,7 +156,7 @@ class AccountState:
             cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
             return cipher.decrypt_and_verify(private_key_enc, tag)
         except Exception as e:
-            log_client("error", "Decrypt", f"unable to decrypt: {e}", user=cls.username())
+            log.error(CTX.DECRYPT, f"unable to decrypt: {e}", user=cls.username())
             return None
 
     @classmethod
@@ -184,12 +185,12 @@ class AccountState:
         """
         data = cls._read()
         if not data:
-            log_client("error", "AccountState", "no local account state found.", user=cls.username())
+            log.error(CTX.ACCOUNT_STATE, "no local account state found.", user=cls.username())
             return None
 
         for key in ["private_key_enc", "nonce", "tag", "salt"]:
             if key not in data:
-                log_client("error", "AccountState", f"missing field '{key}' in local account state.", user=cls.username())
+                log.error(CTX.ACCOUNT_STATE, f"missing field '{key}' in local account state.", user=cls.username())
                 return None
 
         password = getpass.getpass("Enter your password: ")
@@ -200,7 +201,7 @@ class AccountState:
             tag = base64.b64decode(data["tag"])
             salt = base64.b64decode(data["salt"])
         except Exception as e:
-            log_client("error", "AccountState", f"error decoding stored fields: {e}", user=cls.username())
+            log.error(CTX.ACCOUNT_STATE, f"error decoding stored fields: {e}", user=cls.username())
             return None
 
         decrypted = cls._decrypt_private_key(password, private_key_enc, nonce, tag, salt)

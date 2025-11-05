@@ -4,11 +4,13 @@ import bcrypt
 import srp
 import re
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from .account_state import AccountState
+from utils import logger as log
 from utils.network import api_post, handle_resp
-from utils.logger import log_client, notify_user
+from utils.logger import notify_user
+from utils.logger import CTX
 import hashlib
 
 def is_valid_username(username):
@@ -18,10 +20,12 @@ def register_account(args):
     """
     Création d'un nouveau compte utilisateur.
     """
+    
+    logger = log.get_logger(CTX.REGISTER)
 
     # vérifie qu'on est pas déjà connecté
     if AccountState.valid():
-        log_client("info", "Register", "User is already logged in.", user=AccountState.username())
+        logger.info("User is already logged in.")
         notify_user("You are already logged in.")
         return
 
@@ -29,11 +33,11 @@ def register_account(args):
     username_hash = hashlib.sha256(username.encode()).hexdigest()
 
     if not is_valid_username(username):
-        log_client("error", "Register", "Invalid username. Use 3-20 letters, digits, '-' or '_'.", user=username)
+        logger.error("Entered an invalid username")
         notify_user("Invalid username. Use 3-20 letters, digits, '-' or '_'.")
         return
-        
-    log_client("info", "Register", f"Starting registration for username '{username}'", user=username)
+
+    logger.info(f"Starting registration for username '{username}'")
 
     # Demande du mot de passe
     password = getpass.getpass("Enter your password: ")
@@ -78,31 +82,33 @@ def register_account(args):
         "tag": base64.b64encode(tag).decode()
     }
     data = handle_resp(
-        api_post("/register", payload, user=username),
+        api_post("/register", payload),
         required_fields=["username"],
-        context="Register",
-        user=username
+        context=CTX.REGISTER
     )
     if data is None:
         notify_user("Registration failed. Please check logs for details.")
         return
 
-    log_client("info", "Register", f"Account '{username}' created successfully", user=username)
+    logger.info(f"Account '{username}' has been created")
     notify_user(f"Account '{username}' created successfully.")
 
 def login_account(args):
     """
     Authentification d'un utilisateur existant via SRP.
     """
-    username = args.username
 
-    log_client("info", "Login", f"Tried to login as '{username}'")
+    logger = log.get_logger(CTX.LOGIN)
 
     # Vérifie si une session locale est déjà active
     if AccountState.valid():
-        log_client("info", "Login", "User is already logged in.", user=AccountState.username())
+        logger.info("User is already logged in.")
         notify_user("You are already logged in.")
         return
+
+    username = args.username
+    logger = log.get_logger(CTX.LOGIN, username)
+    logger.info(f"Tried to login as '{username}'")
 
     username_hash = hashlib.sha256(username.encode()).hexdigest()
     password = getpass.getpass(f"Enter the password of '{username}': ")
@@ -129,7 +135,7 @@ def login_account(args):
     data = handle_resp(
         api_post("/srp/start", payload, user=username),
         required_fields=["salt", "B"],
-        context="SRP start",
+        context=CTX.SRP_START,
         user=username
     )
     if data is None:
@@ -152,7 +158,7 @@ def login_account(args):
     data = handle_resp(
         api_post("/srp/verify", payload, user=username),
         required_fields=["HAMK", "session_id"],
-        context="SRP verify",
+        context=CTX.SRP_VERIFY,
         user=username
     )
     if data is None:
@@ -166,14 +172,14 @@ def login_account(args):
     session_id = data.get("session_id")
     usr.verify_session(HAMK)
     if not usr.authenticated() or not session_id:
-        log_client("error", "Login", "incorrect username or password", user=username)
+        logger.error("Incorrect username or password (SRP verification failed).")
         notify_user("Incorrect username or password.")
         return
     # Demande au serveur la user key et réceptionne les données
     data = handle_resp(
         api_post("/userkey", {"session_id": session_id}, user=username),
         required_fields=["user_key"],
-        context="Fetch user key",
+        context=CTX.FETCH_USER_KEY,
         user=username
     )
     if data is None:
@@ -188,7 +194,7 @@ def login_account(args):
     tag_b64 = user_key.get("tag")
 
     if not all([public_key_b64, private_key_enc_b64, nonce_b64, tag_b64]):
-        log_client("error", "Login", "incomplete user key data from server.", user=username)
+        logger.error("Incomplete user key data from server.")
         notify_user("Incomplete user key data received from server.")
         return
 
@@ -203,11 +209,11 @@ def login_account(args):
     # Stockage de l'état du compte pour les prochaines commandes
     AccountState.set_private_key(private_user_key) # clé privée en mémoire volatile
     if AccountState.save(username, session_id, public_key_b64, private_key_enc_b64, nonce_b64, tag_b64, salt_b64) is False:
-        log_client("error", "Login", "failed to save account state locally.", user=username)
+        logger.error("Failed to save account state locally.")
         notify_user("Failed to save account state locally.")
         return
 
-    log_client("info", "Login", f"Login successful, welcome {username}.", user=username)
+    logger.info(f"User '{username}' successfully logged")
     notify_user(f"Login successful. Welcome {username}!")
 
 def logout_account(args):
@@ -217,22 +223,23 @@ def logout_account(args):
 
     session_id = AccountState.session_id()
     username = AccountState.username()
+    logger = log.get_logger(CTX.LOGOUT, username)
+
     if not session_id:
-        log_client("info", "Logout", "No active session found.", user=username)
+        logger.info("No active session found")
         notify_user("No active session found.")
         return
         
     data = handle_resp(
         api_post("/session/logout", {"session_id": session_id}, user=username),
-        context="Logout",
+        context=CTX.LOGOUT,
         user=username
     )
     if data is None: 
-        log_client("error", "Logout", "failed to revoke session on server.", user=username)
-        notify_user("Failed to revoke session on server.")
+        logger.error("Failed to revoke session on server.")
         return
 
     # Nettoyage de la session locale
     AccountState.clear()
-    log_client("info", "Logout", "Logout successful. Session terminated.", user=username)
+    logger.info(f"User '{username}' logged out")
     notify_user("Logout successful. Session terminated.")
