@@ -28,7 +28,7 @@ def api_post(endpoint, payload=None, user=None):
         log_client("info", "Network", f"sending POST {endpoint}", user=user)
         resp = requests.post(url, json=payload or {})
         log_client("info", "Network", f"received {resp.status_code} from {endpoint}", user=user)
-        resp.raise_for_status()
+        #resp.raise_for_status()
         return resp
 
     except requests.exceptions.ConnectionError:
@@ -58,7 +58,7 @@ def handle_resp(resp, required_fields=None, context="Server", user=None):
         dict or None: Les données extraites de la réponse si succès et champs requis présents, sinon None.
     """
 
-    if not resp:
+    if resp is None:
         log_client("error", context, "no response received", user=user)
         return None
 

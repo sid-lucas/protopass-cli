@@ -94,6 +94,9 @@ def login_account(args):
     """
     Authentification d'un utilisateur existant via SRP.
     """
+    username = args.username
+
+    log_client("info", "Login", f"Tried to login as '{username}'")
 
     # Vérifie si une session locale est déjà active
     if AccountState.valid():
@@ -101,7 +104,6 @@ def login_account(args):
         notify_user("You are already logged in.")
         return
 
-    username = args.username
     username_hash = hashlib.sha256(username.encode()).hexdigest()
     password = getpass.getpass(f"Enter the password of '{username}': ")
 
@@ -131,7 +133,7 @@ def login_account(args):
         user=username
     )
     if data is None:
-        notify_user("Login failed during SRP start.")
+        notify_user("Incorrect username or password. Try again.")
         return
 
     # Réception du sel et clé publique (B) du serveur
@@ -154,7 +156,7 @@ def login_account(args):
         user=username
     )
     if data is None:
-        notify_user("Login failed during SRP verification.")
+        notify_user("Incorrect username or password. Try again.")
         return
 
     # Réception de la preuve d'authentification finale (HAMK)

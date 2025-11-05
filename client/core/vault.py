@@ -73,7 +73,7 @@ def _fetch_vault_rows():
         rows.append({
             "idx": str(len(rows) + 1),
             "name": vault_name or "-",
-            "desc": description or "(no description)",
+            "desc": description or "-",
             "created": format_timestamp(created_at),
             "uuid": vault["vault_id"]
         })
@@ -107,9 +107,11 @@ def decrypt_metadata(blob: dict | None, key: bytes) -> str | None:
         log_client("error", "Vault List", f"Failed to decrypt metadata: {err}", user=auth.AccountState.username())
         return None
 
+
+
 def delete_vault(args):
     rows = _fetch_vault_rows()
-    if rows is None:
+    if not rows:
         return
     
     vault_id_to_del = None
@@ -132,13 +134,13 @@ def select_vault(args):
     
 def list_vaults(_args):
     rows = _fetch_vault_rows()
-    if rows is None:
+    if not rows:
         return
 
     #log_client("info", "Vault List", f"Name: '{vault_name}', Vault ID: {vault_id[:8]}...")
 
     columns = [
-        ("idx", "#", 2),
+        ("idx", "#", 3),
         ("name", "Name", 15),
         ("desc", "Description", 40),
         ("created", "Created", 17),

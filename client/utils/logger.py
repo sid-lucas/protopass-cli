@@ -2,23 +2,45 @@ import logging
 from pathlib import Path
 
 
+
+# ============================================================
+# Paths & filenames
+# ============================================================
 LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "protopass.log"
+
+
+# ============================================================
+# Logging configuration
+# ============================================================
+class _UserAwareFormatter(logging.Formatter):
+    def format(self, record):
+        user = getattr(record, "user", None)
+        if user and user != "-":
+            record.user_display = f" | user={user}"
+        else:
+            record.user_display = ""
+        return super().format(record)
+
+
+_formatter = _UserAwareFormatter(
+    "%(asctime)s | %(levelname)s | %(context)s%(user_display)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 _logger = logging.getLogger("protopass.client")
 if not _logger.handlers:
     _logger.setLevel(logging.INFO)
     file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
-    formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)s | %(context)s | user=%(user)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    file_handler.setFormatter(formatter)
+    file_handler.setFormatter(_formatter)
     _logger.addHandler(file_handler)
     _logger.propagate = False
 
 
+# ============================================================
+# Helpers
+# ============================================================
 def _resolve_username(explicit_user: str | None) -> str | None:
     if explicit_user:
         return explicit_user
@@ -29,6 +51,9 @@ def _resolve_username(explicit_user: str | None) -> str | None:
         return None
 
 
+# ============================================================
+# Public API
+# ============================================================
 def log_client(level: str, context: str, message: str, user: str | None = None) -> None:
     """
     Écrit un message dans le journal client (fichier).
