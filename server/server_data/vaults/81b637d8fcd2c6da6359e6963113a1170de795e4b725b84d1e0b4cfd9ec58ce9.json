@@ -36,5 +36,26 @@
       "tag": "ynnlpU/BHepCpxkxfql2jg=="
     },
     "items": []
+  },
+  {
+    "vault_id": "6f6caaae-f5e9-49f2-8ba8-f8fce1e1703b",
+    "key_enc": "gGt47rLU/Q4uRbqnXEJvIOibQIPv4f4x8wwjYXc8rz/juh7ChZrbg7Zyz8/klvsO/RYM1Ugd8wb8F2J7mSpJ1zQUIsPtvREdwBqH/jeZcOj2xXjNGoy5LS6FnUDsy+Ub1Y/TAc1WwLL3wfMBjl7SR0FsH32OgzKQM2YiKR3L2GAL3YUoZZi3PQvnCX/4A407pxFxKbzawA6PebgG9xRNv3eg0mhEuS5DWm765HudMKYo+aQ+4Genxiy7nMzUV4w8HvCYl2iV+/CwnIiBnRkVXyTH+cLGiaZwUn9LiPrsAfkoogTZ1oA3NGJeeRVJNuTqIdIytlGI6lGx7kR+4HQN5g==",
+    "signature": "MQPNp9Z0JsBrpB45b1PLM+tV2xAPgESPBSWgm1qXZd5vgKhDUJR/Qx4EF1qUsfODnAYBFxJ1+ZZw/8cJMaRvwL5Z8LaCT4rsZADC8OUF6MTSUKZ7BlXdlr2Ia/3c5btYBrk6Qo4SaVFwYZ06kJWCelap6A3XXQS6MRbajgYwl9/L2B6GLIVdTVKutuqusEK4c3dxkmnw14Ep0GhZxPpBDeOK0rnhx13xhftBo9YKoOhDwwLDKvZV7ZqnJrakfV5Jisl5k+cgEc2aGtgtIYSauL4ySU4SPlArvKEz9RJ73gld9SHoLjchQVCJz56vLF0Qv3cXFM2qg8cZ/7X0IGbErQ==",
+    "name": {
+      "enc": "ohZxkNVwtQw+dNVzcwpT",
+      "nonce": "04u5Vpb9487643r5",
+      "tag": "aB2AOMZsKBTZHnETRiySwQ=="
+    },
+    "description": {
+      "enc": "L0MW15YZUiF90ZNo2xrPctogvPvd3cIcvkjcNxK0hVSelo9vf9JCWQ==",
+      "nonce": "ffDuL6Uxadk5W1lj",
+      "tag": "kEMsFKwj/KvEiyumJi1p/Q=="
+    },
+    "created_at": {
+      "enc": "CPmduqUhIIXoEem256jAA0DT1i/fA1DfmYc6AFw4mkQ=",
+      "nonce": "Uiw9ImkKSyCLtk5k",
+      "tag": "JFm1xh6sN/DQWsX9Z9wsQQ=="
+    },
+    "items": []
   }
 ]

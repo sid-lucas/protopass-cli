@@ -1,8 +1,9 @@
+import base64
 import uuid
 import os
-import base64
 from core import auth
 from datetime import datetime, timezone
+from utils.display import render_table, format_timestamp
 from utils.network import api_post, handle_resp
 from utils.logger import log_client
 from Crypto.PublicKey import RSA
@@ -25,14 +26,7 @@ def _prompt_field(label, max_len, allow_empty=False):
             continue
         return value
 
-def _format_timestamp(value: str | None) -> str:
-    if not value:
-        return "Unknown"
-    try:
-        dt = datetime.fromisoformat(value)
-    except ValueError:
-        return value  # laisse tel quel si parsing impossible
-    return dt.strftime("%d %b %Y %H:%M")
+
     
 def encrypt_metadata(key: bytes, value: str | None) -> dict | None:
     if not value:
@@ -84,7 +78,7 @@ def list_vaults(_args):
         return
     rsa_cipher = PKCS1_OAEP.new(RSA.import_key(private_key))
     
-    print("--- Vaults:")
+    rows = []
     for vault in vaults:
         vault_id = vault.get("vault_id", "unknown")
         try:
@@ -100,12 +94,23 @@ def list_vaults(_args):
         except Exception as e:
             log_client("error", "Vault List", f"Failed to decrypt vault '{vault_id[:8]}...': {e}")
             continue
-        
-        created_at_str = _format_timestamp(created_at)
-        print(f"{vault_name} - {description or '(no description)'} (Created: {created_at_str})")
+
+        rows.append({
+            "idx": str(len(rows) + 1),
+            "name": vault_name or "-",
+            "desc": description or "-",
+            "created": format_timestamp(created_at) or "-",
+        })
+
         #log_client("info", "Vault List", f"Name: '{vault_name}', Vault ID: {vault_id[:8]}...")
 
-    print("END OF LIST")
+    columns = [
+        ("idx", "#", 2),
+        ("name", "Name", 15),
+        ("desc", "Description", 40),
+        ("created", "Created", 17),
+    ]
+    print(render_table(rows, columns))
 
 def create_vault(_args):
 
