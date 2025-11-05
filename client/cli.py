@@ -67,7 +67,7 @@ def build_parser():
     p_vault_create.set_defaults(func=vault.create_vault)
 
     p_vault_delete = vault_sub.add_parser("delete", help="Delete a vault")
-    p_vault_delete.add_argument("--name", required=True, help="Name of the vault to delete")
+    p_vault_delete.add_argument("index", type=int, help="Index as shown in vault list")
     p_vault_delete.set_defaults(func=vault.delete_vault)
 
     p_vault_select = vault_sub.add_parser("select", help="Select a vault to use")

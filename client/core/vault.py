@@ -28,6 +28,58 @@ def _prompt_field(label, max_len, allow_empty=False):
             continue
         return value
 
+def _fetch_vault_rows():
+    current_user = auth.AccountState.username()
+    resp = api_post("/vault/list", {"session_id": auth.AccountState.session_id()}, user=current_user)
+    data = handle_resp(
+        resp,
+        required_fields=["vaults"],
+        context="Vault List",
+        user=current_user
+    )
+    if data is None:
+        notify_user("Unable to retrieve vault list. See logs for details.")
+        return None
+    vaults = data["vaults"]
+    if len(vaults) == 0:
+        log_client("info", "Vault List", "No vaults found.", user=current_user)
+        notify_user("No vaults found.")
+        return None
+    
+    private_key = auth.AccountState.private_key()
+    if private_key is None:
+        log_client("error", "Vault List", "No valid private key found in account state (memory).", user=current_user)
+        notify_user("Unable to decrypt vaults with current keys.")
+        return None
+    rsa_cipher = PKCS1_OAEP.new(RSA.import_key(private_key))
+    
+    rows = []
+    for vault in vaults:
+        vault_id = vault.get("vault_id", "unknown")
+        try:
+            # Déchiffrement de la vault_key
+            vault_key_enc = base64.b64decode(vault["key_enc"])
+            vault_key = rsa_cipher.decrypt(vault_key_enc)
+
+            # Déchiffrement du nom du vault
+            vault_name = decrypt_metadata(vault["name"], vault_key)
+            description = decrypt_metadata(vault.get("description"), vault_key)
+            created_at = decrypt_metadata(vault.get("created_at"), vault_key)
+
+        except Exception as e:
+            log_client("error", "Vault List", f"Failed to decrypt vault '{vault_id[:8]}...': {e}", user=current_user)
+            continue
+
+        rows.append({
+            "idx": str(len(rows) + 1),
+            "name": vault_name or "-",
+            "desc": description or "(no description)",
+            "created": format_timestamp(created_at),
+            "uuid": vault["vault_id"]
+        })
+
+    return rows
+
 
     
 def encrypt_metadata(key: bytes, value: str | None) -> dict | None:
@@ -56,61 +108,34 @@ def decrypt_metadata(blob: dict | None, key: bytes) -> str | None:
         return None
 
 def delete_vault(args):
-    print("delete")
+    rows = _fetch_vault_rows()
+    if rows is None:
+        return
+    
+    vault_id_to_del = None
+    
+    for row in rows:
+        if row.get("idx") == str(args.index):
+            vault_id_to_del = row.get("uuid")
+            break
+
+    if vault_id_to_del is None:
+        notify_user(f"No vault found for index '{args.index}'")
+        log_client("error", "Vault delete", f"No vault associated with index '{args.index}', deletion aborted", user=auth.AccountState.username())
+
+    notify_user(f"found vault id to del : {vault_id_to_del}")
+    
+    notify_user(f"Vault deleted successfully.")
 
 def select_vault(args):
     print("select")
     
 def list_vaults(_args):
-    current_user = auth.AccountState.username()
-    resp = api_post("/vault/list", {"session_id": auth.AccountState.session_id()}, user=current_user)
-    data = handle_resp(
-        resp,
-        required_fields=["vaults"],
-        context="Vault List",
-        user=current_user
-    )
-    if data is None:
-        notify_user("Unable to retrieve vault list. See logs for details.")
+    rows = _fetch_vault_rows()
+    if rows is None:
         return
-    vaults = data["vaults"]
-    if len(vaults) == 0:
-        log_client("info", "Vault List", "No vaults found.", user=current_user)
-        notify_user("No vaults found.")
-        return 
-    
-    private_key = auth.AccountState.private_key()
-    if private_key is None:
-        log_client("error", "Vault List", "No valid private key found in account state (memory).", user=current_user)
-        notify_user("Unable to decrypt vaults with current keys.")
-        return
-    rsa_cipher = PKCS1_OAEP.new(RSA.import_key(private_key))
-    
-    rows = []
-    for vault in vaults:
-        vault_id = vault.get("vault_id", "unknown")
-        try:
-            # Déchiffrement de la vault_key
-            vault_key_enc = base64.b64decode(vault["key_enc"])
-            vault_key = rsa_cipher.decrypt(vault_key_enc)
 
-            # Déchiffrement du nom du vault
-            vault_name = decrypt_metadata(vault["name"], vault_key)
-            description = decrypt_metadata(vault.get("description"), vault_key)
-            created_at = decrypt_metadata(vault.get("created_at"), vault_key)
-
-        except Exception as e:
-            log_client("error", "Vault List", f"Failed to decrypt vault '{vault_id[:8]}...': {e}", user=current_user)
-            continue
-
-        rows.append({
-            "idx": str(len(rows) + 1),
-            "name": vault_name or "-",
-            "desc": description or "(no description)",
-            "created": format_timestamp(created_at),
-        })
-
-        #log_client("info", "Vault List", f"Name: '{vault_name}', Vault ID: {vault_id[:8]}...")
+    #log_client("info", "Vault List", f"Name: '{vault_name}', Vault ID: {vault_id[:8]}...")
 
     columns = [
         ("idx", "#", 2),
