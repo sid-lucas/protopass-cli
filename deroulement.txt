@@ -27,3 +27,4 @@ source .venv/bin/activate
 # Installation des dépendances dans l’environnement virtuel
 pip install -r requirements.txt
 
+# Project Python ≥ 3.3 only
