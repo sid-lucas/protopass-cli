@@ -1,12 +1,12 @@
 import base64
 import uuid
 import os
-from core import auth
+from client.core import auth
+from client.utils.display import render_table, format_timestamp
+from client.utils.network import api_post, handle_resp
+from client.utils import logger as log
+from client.utils.logger import CTX, notify_user
 from datetime import datetime, timezone
-from utils.display import render_table, format_timestamp
-from utils.network import api_post, handle_resp
-from utils import logger as log
-from utils.logger import CTX, notify_user
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_OAEP
@@ -143,6 +143,10 @@ def select_vault(args):
     print("select")
     
 def list_vaults(_args):
+    if not auth.AccountState.valid():
+        print("You must be logged in to list vaults.")
+        return
+
     rows = _fetch_vault_rows()
     if not rows:
         return

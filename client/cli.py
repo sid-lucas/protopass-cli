@@ -2,8 +2,8 @@ import argparse
 import os
 import readline
 import atexit
-from core import auth
-from core import vault
+from .core import auth
+from .core import vault
 
 class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):

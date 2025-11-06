@@ -26,7 +26,7 @@ def temp_sessions_file(tmp_path, monkeypatch):
     """
     # Modifie la var globale du fichier de stockage en un fichier temporaire
     sessions_file = tmp_path / "sessions.json"
-    monkeypatch.setattr(session_store, "PATH", str(sessions_file))
+    monkeypatch.setattr(session_store, "SESSIONS_PATH", str(sessions_file))
     return sessions_file
 
 

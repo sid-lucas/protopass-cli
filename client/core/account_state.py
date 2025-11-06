@@ -3,7 +3,7 @@ import base64
 import json
 import os
 from pathlib import Path
-from client.utils import logger as log
+from ..utils import logger as log
 from client.utils.logger import CTX, notify_user
 from client.utils.network import api_post, handle_resp
 from Crypto.Cipher import AES

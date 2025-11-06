@@ -7,10 +7,10 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from .account_state import AccountState
-from utils import logger as log
-from utils.network import api_post, handle_resp
-from utils.logger import notify_user
-from utils.logger import CTX
+from ..utils import logger as log
+from client.utils.network import api_post, handle_resp
+from client.utils.logger import notify_user
+from client.utils.logger import CTX
 import hashlib
 
 def is_valid_username(username):

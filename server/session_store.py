@@ -1,13 +1,13 @@
 import json, os, time, secrets
 from typing import Optional
 
-PATH = os.path.join(os.path.dirname(__file__), "server_data", "sessions.json")
+SESSIONS_PATH = os.path.join(os.path.dirname(__file__), "server_data", "sessions.json")
 
 def _load():
-    if not os.path.exists(PATH):
+    if not os.path.exists(SESSIONS_PATH):
         return {}
     try:
-        with open(PATH, "r", encoding="utf-8") as f:
+        with open(SESSIONS_PATH, "r", encoding="utf-8") as f:
             content = f.read().strip()
             if not content:
                 return {}  # fichier vide -> on repart à zéro
@@ -18,8 +18,8 @@ def _load():
 
 
 def _save(data):
-    os.makedirs(os.path.dirname(PATH), exist_ok=True)
-    with open(PATH, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(SESSIONS_PATH), exist_ok=True)
+    with open(SESSIONS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 def create_session(username: str, ttl_seconds: int = 900) -> str:
