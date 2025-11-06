@@ -28,7 +28,10 @@ def dispatch_command(args):
         print("You must be logged in to use this command.")
         return
 
-    args.func(args)
+    try:
+        args.func(args)
+    except (KeyboardInterrupt, EOFError):
+        print("\nOperation cancelled by user.")
 
 def build_parser():
     """
