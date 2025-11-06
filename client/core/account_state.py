@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 from utils import logger as log
-from utils.logger import CTX
+from utils.logger import CTX, notify_user
 from utils.network import api_post, handle_resp
 from Crypto.Cipher import AES
 import bcrypt
@@ -214,9 +214,6 @@ class AccountState:
                 logger.error(f"Missing field '{key}' in local account state.")
                 return None
 
-        logger.info("Reloading private key from disk.")
-        password = getpass.getpass("Enter your password: ")
-
         try:
             private_key_enc = base64.b64decode(data["private_key_enc"])
             nonce = base64.b64decode(data["nonce"])
@@ -226,13 +223,16 @@ class AccountState:
             logger.error(f"Error decoding stored fields: {e}")
             return None
 
-        decrypted = cls._decrypt_private_key(password, private_key_enc, nonce, tag, salt)
-        if decrypted is None:
-            logger.warning("Private key decryption aborted.")
-            return None
+        logger.info("Reloading private key from disk.")
+        while True:
+            password = getpass.getpass("Enter your password: ")
+            decrypted = cls._decrypt_private_key(password, private_key_enc, nonce, tag, salt)
+            if decrypted is None:
+                notify_user("Incorrect password. Try again.")
+                continue
 
-        cls.set_private_key(decrypted)
-        return bytes(cls._private_key) 
+            cls.set_private_key(decrypted)
+            return bytes(cls._private_key) 
 
     # ============================================================
     # Gestion des clés de vault (cache mémoire uniquement)
