@@ -1,4 +1,5 @@
 import json, os, time, secrets
+from typing import Optional
 
 PATH = os.path.join(os.path.dirname(__file__), "server_data", "sessions.json")
 
@@ -28,7 +29,7 @@ def create_session(username: str, ttl_seconds: int = 900) -> str:
     _save(data)
     return sid
 
-def get_session(sid: str):
+def get_session(sid: str, u_hash: Optional[str] = None):
     data = _load()
     s = data.get(sid)
     if not s: 
@@ -36,6 +37,8 @@ def get_session(sid: str):
     if s["exp"] < time.time():
         # nettoyage lazy
         del data[sid]; _save(data)
+        return None
+    if u_hash and s["username"] != u_hash:
         return None
     return s
 
@@ -47,7 +50,7 @@ def revoke_session(sid: str) -> bool:
         return True
     return False
 
-def is_valid(sid: str) -> bool:
+def is_valid(sid: str, u_hash: Optional[str] = None) -> bool:
     data = _load()
     s = data.get(sid)
     if not s:
@@ -56,5 +59,7 @@ def is_valid(sid: str) -> bool:
         # nettoyage lazy des expirées
         del data[sid]
         _save(data)
+        return False
+    if u_hash and s["username"] != u_hash:
         return False
     return True

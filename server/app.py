@@ -19,14 +19,16 @@ def require_session(func):
     def wrapper(*args, **kwargs):
         data = request.get_json(force=True) or {}
         token = data.get("session_id")
+        username_hash = data.get("username_hash")
 
         if not token:
             return make_resp("error", "Session", "missing session_id", 400)
 
-        if not is_valid(token):
+        valid = is_valid(token, username_hash) if username_hash else is_valid(token)
+        if not valid:
             return make_resp("error", "Session", "invalid or expired session", 401)
 
-        s = get_session(token)
+        s = get_session(token, username_hash)
         if not s:
             return make_resp("error", "Session", "session not found", 401)
 
@@ -169,9 +171,14 @@ def logout_session():
 
     data = request.get_json(force=True)
     token = data.get("session_id")
+    username_hash = data.get("username_hash")
 
     if not token:
         return make_resp("error", "Session logout", "missing session_id", 400)
+
+    valid = is_valid(token, username_hash) if username_hash else is_valid(token)
+    if not valid:
+        return make_resp("error", "Session logout", "invalid or expired session", 401)
 
     # Supprime la session côté serveur et informe le client
     revoke_session(token)

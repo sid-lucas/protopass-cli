@@ -110,6 +110,7 @@ def login_account(args):
     logger = log.get_logger(CTX.LOGIN, username)
     logger.info(f"Tried to login as '{username}'")
 
+    # TODO HASHER COMME CA OU COMME 
     username_hash = hashlib.sha256(username.encode()).hexdigest()
     password = getpass.getpass(f"Enter the password of '{username}': ")
 
@@ -176,8 +177,13 @@ def login_account(args):
         notify_user("Incorrect username or password.")
         return
     # Demande au serveur la user key et réceptionne les données
+    #TODO PAS SUR REGARDER SI ON PEU VIRER
     data = handle_resp(
-        api_post("/userkey", {"session_id": session_id}, user=username),
+        api_post(
+            "/userkey",
+            {"session_id": session_id, "username_hash": username_hash},
+            user=username
+        ),
         required_fields=["user_key"],
         context=CTX.FETCH_USER_KEY,
         user=username
@@ -221,17 +227,17 @@ def logout_account(args):
     Déconnexion de l'utilisateur (révocation de la session côté client et serveur).
     """
 
-    session_id = AccountState.session_id()
+    session_payload = AccountState.session_payload()
     username = AccountState.username()
     logger = log.get_logger(CTX.LOGOUT, username)
 
-    if not session_id:
+    if not session_payload:
         logger.info("No active session found")
         notify_user("No active session found.")
         return
-        
+
     data = handle_resp(
-        api_post("/session/logout", {"session_id": session_id}, user=username),
+        api_post("/session/logout", session_payload, user=username),
         context=CTX.LOGOUT,
         user=username
     )

@@ -8,6 +8,7 @@ from utils.logger import CTX, notify_user
 from utils.network import api_post, handle_resp
 from Crypto.Cipher import AES
 import bcrypt
+import hashlib
 
 class AccountState:
     """
@@ -95,9 +96,14 @@ class AccountState:
             logger.debug("No local session ID available. Session is considered invalid.")
             return False
 
+        session_payload = cls.session_payload()
+        if session_payload is None:
+            logger.debug("Unable to build session payload. Session is considered invalid.")
+            return False
+
         # Vérifie auprès du serveur
         data = handle_resp(
-            api_post("/session/verify", {"session_id": sid}, user=current_user),
+            api_post("/session/verify", session_payload, user=current_user),
             required_fields=["username"],
             context=CTX.SESSION_VERIFY,
             user=current_user
@@ -105,8 +111,17 @@ class AccountState:
         if data is None:
             logger.warning(f"Local session '{sid[:8]}' invalid according to server, clearing local data.")
             cls.clear()
+            return False
 
-        return bool(data)
+        server_username_hash = data.get("username")
+        expected_hash = session_payload.get("username_hash")
+        if expected_hash and server_username_hash and expected_hash != server_username_hash:
+            logger.error("Session username mismatch detected; clearing local data.")
+            notify_user("Local session data is inconsistent. Please log in again.")
+            cls.clear()
+            return False
+
+        return True
 
     @classmethod
     def username(cls):
@@ -137,6 +152,17 @@ class AccountState:
             return None
         cls._cached_session_id = session_id
         return cls._cached_session_id
+
+    @classmethod
+    def session_payload(cls):
+        session_id = cls.session_id()
+        if not session_id:
+            return None
+        payload = {"session_id": session_id}
+        username = cls.username()
+        if username:
+            payload["username_hash"] = hashlib.sha256(username.encode()).hexdigest()
+        return payload
 
     @classmethod
     def public_key(cls):

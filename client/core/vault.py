@@ -33,7 +33,12 @@ def _prompt_field(label, max_len, allow_empty=False):
 def _fetch_vault_rows():
     current_user = auth.AccountState.username()
     logger = log.get_logger(CTX.VAULT_LIST, current_user)
-    resp = api_post("/vault/list", {"session_id": auth.AccountState.session_id()}, user=current_user)
+    session_payload = auth.AccountState.session_payload()
+    if session_payload is None:
+        logger.error("No active session found in account state.")
+        notify_user("No active session. Please log in.")
+        return None
+    resp = api_post("/vault/list", session_payload, user=current_user)
     data = handle_resp(
         resp,
         required_fields=["vaults"],
@@ -191,14 +196,14 @@ def create_vault(_args):
 
     # Pas d'items créés pour l'instant
 
-    session_id = auth.AccountState.session_id()
-    if session_id is None:
-        logger.error("No valid session ID found in account state.")
+    session_payload = auth.AccountState.session_payload()
+    if session_payload is None:
+        logger.error("No valid session found in account state.")
         notify_user("No active session. Please log in.")
         return
     # Envoie les informations du nouveau vault au serveur
     payload = {
-        "session_id": session_id,
+        **session_payload,
         "vault_id": vault_id,
         "key_enc": base64.b64encode(vault_key_enc).decode(),
         "signature": base64.b64encode(vault_signature).decode(),
