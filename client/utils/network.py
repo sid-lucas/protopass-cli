@@ -1,6 +1,6 @@
 import requests
-from utils import logger as log
-from utils.logger import CTX
+from client.utils import logger as log
+from client.utils.logger import CTX
 
 SERVER_URL = "http://127.0.0.1:5000"
 
