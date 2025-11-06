@@ -29,11 +29,14 @@ class AccountState:
     # ============================================================
     @classmethod
     def _read(cls):
+        logger = log.get_logger(CTX.ACCOUNT_STATE, user="")
         if not cls.PATH.exists():
+            logger.debug("Local account_state.json is missing.")
             return None
         try:
             return json.loads(cls.PATH.read_text())
         except Exception:
+            logger.error("Unable to decode account_state.json, file may be corrupted.")
             return None
 
     @classmethod
@@ -85,12 +88,14 @@ class AccountState:
     @classmethod
     def valid(cls):
         """Vérifie si la session locale existe et est encore valide côté serveur."""
-        sid = cls.session_id()
-        if not sid:
-            return False
         current_user = cls.username()
         logger = log.get_logger(CTX.SESSION_VERIFY, current_user)
+        sid = cls.session_id()
+        if not sid:
+            logger.debug("No local session ID available. Session is considered invalid.")
+            return False
 
+        # Vérifie auprès du serveur
         data = handle_resp(
             api_post("/session/verify", {"session_id": sid}, user=current_user),
             required_fields=["username"],
@@ -98,19 +103,26 @@ class AccountState:
             user=current_user
         )
         if data is None:
-            logger.warning(f"Local session {sid[:8]} invalid according to server, clearing cache.")
+            logger.warning(f"Local session '{sid[:8]}' invalid according to server, clearing local data.")
             cls.clear()
 
         return bool(data)
 
     @classmethod
     def username(cls):
+        # Récupère le username du cache si existe
         if cls._cached_username is not None:
             return cls._cached_username
+        
+        # Sinon lis le username stocké sur le disque
         data = cls._read()
         if not data:
             return None
-        cls._cached_username = data.get("username")
+
+        username = data.get("username")
+        if not username:
+            return None
+        cls._cached_username = username
         return cls._cached_username
 
     @classmethod
@@ -120,7 +132,10 @@ class AccountState:
         data = cls._read()
         if not data:
             return None
-        cls._cached_session_id = data.get("session_id")
+        session_id = data.get("session_id")
+        if not session_id:
+            return None
+        cls._cached_session_id = session_id
         return cls._cached_session_id
 
     @classmethod
@@ -133,12 +148,13 @@ class AccountState:
         public_key_b64 = data.get("public_key")
         if not public_key_b64:
             return None
-        logger = log.get_logger(CTX.ACCOUNT_STATE, cls.username())
         try:
             cls._cached_public_key = base64.b64decode(public_key_b64)
             return cls._cached_public_key
         except Exception as e:
-            logger.error(f"Invalid public key encoding in account_state.json: {e}")
+            log.get_logger(CTX.ACCOUNT_STATE, user=cls._cached_username or "").error(
+                f"Invalid public key encoding in account_state.json: {e}"
+            )
             return None
         
     # ============================================================
@@ -149,7 +165,6 @@ class AccountState:
         """
         Déchiffre la clé privée user key avec la clé dérivée bcrypt.
         """
-        logger = log.get_logger(CTX.DECRYPT, cls.username())
         try:
             # Dérivation de la clé AES via bcrypt
             aes_key = bcrypt.kdf(
@@ -161,7 +176,7 @@ class AccountState:
             cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
             return cipher.decrypt_and_verify(private_key_enc, tag)
         except Exception as e:
-            logger.error(f"Unable to decrypt private key: {e}")
+            log.get_logger(CTX.DECRYPT, cls.username()).error(f"Unable to decrypt private key: {e}")
             return None
 
     @classmethod

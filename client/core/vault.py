@@ -154,6 +154,15 @@ def list_vaults(_args):
 
 def create_vault(_args):
     current_user = auth.AccountState.username()
+    public_key = auth.AccountState.public_key()
+    private_key = auth.AccountState.private_key()
+    if current_user is None or public_key is None or private_key is None:
+        notify_user(
+            "Vault creation aborted: local account state is invalid.\n"
+            "Run 'logout' then 'login' to regenerate your keys."
+        )
+        return
+    
     logger = log.get_logger(CTX.VAULT_CREATE, current_user)
 
     vault_name = _prompt_field("Vault name", 15)
@@ -165,14 +174,7 @@ def create_vault(_args):
     # Génère une clé symétrique de 256bits pour le vault
     vault_key = os.urandom(32)
 
-    public_key = auth.AccountState.public_key()
-    if public_key is None:
-        logger.error("No valid public key found in account state.")
-        return
-    private_key = auth.AccountState.private_key()
-    if private_key is None:
-        logger.error("No valid private key found in account state (memory).")
-        return
+    
 
     # signature de la clé du vault avec la clé privée de l'utilisateur
     vault_key_hash = SHA256.new(vault_key).digest()
