@@ -34,10 +34,13 @@ class AccountState:
         if not cls.PATH.exists():
             logger.debug("Local account_state.json is missing.")
             return None
+
         try:
             return json.loads(cls.PATH.read_text())
         except Exception:
-            logger.error("Unable to decode account_state.json, file may be corrupted.")
+            cls.clear()
+            logger.error("Unable to decode account_state.json, file inexistant or corrupted.")
+            notify_user("Local session data is invalid. Please log in again.")
             return None
 
     @classmethod

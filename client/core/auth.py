@@ -233,7 +233,7 @@ def logout_account(args):
 
     if not session_payload:
         logger.info("No active session found")
-        notify_user("No active session found.")
+        notify_user("Already logged out.")
         return
 
     data = handle_resp(

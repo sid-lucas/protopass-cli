@@ -10,7 +10,7 @@ class ShellArgumentParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
-SESSION_OPTIONAL_COMMANDS = {"login", "register", "shell"}
+SESSION_OPTIONAL_COMMANDS = {"login", "logout", "register", "shell"}
 
 def dispatch_command(args):
     """

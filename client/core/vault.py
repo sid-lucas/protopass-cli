@@ -144,7 +144,7 @@ def select_vault(args):
     
 def list_vaults(_args):
     if not auth.AccountState.valid():
-        print("You must be logged in to list vaults.")
+        print("Please login to list vaults.")
         return
 
     rows = _fetch_vault_rows()
