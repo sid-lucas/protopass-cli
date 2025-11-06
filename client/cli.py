@@ -87,7 +87,11 @@ def main():
     parser = build_parser()
 
     # Lit ce que l'user passe comme arguments (après 'python cli.py')
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except ValueError as err:
+        print(err)
+        return
 
     if not args.command:
         return
