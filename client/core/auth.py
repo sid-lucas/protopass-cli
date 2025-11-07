@@ -6,12 +6,12 @@ import re
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
+from Crypto.Hash import SHA256
 from .account_state import AccountState
 from ..utils import logger as log
 from client.utils.network import api_post, handle_resp
 from client.utils.logger import notify_user
 from client.utils.logger import CTX
-import hashlib
 
 def is_valid_username(username):
     return re.fullmatch(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{1,18}[a-zA-Z0-9])?$", username) is not None
@@ -30,7 +30,7 @@ def register_account(args):
         return
 
     username = args.username
-    username_hash = hashlib.sha256(username.encode()).hexdigest()
+    username_hash = SHA256.new(username.encode()).hexdigest()
 
     if not is_valid_username(username):
         logger.error("Entered an invalid username")
@@ -110,8 +110,7 @@ def login_account(args):
     logger = log.get_logger(CTX.LOGIN, username)
     logger.info(f"Tried to login as '{username}'")
 
-    # TODO HASHER COMME CA OU COMME 
-    username_hash = hashlib.sha256(username.encode()).hexdigest()
+    username_hash = SHA256.new(username.encode()).hexdigest()
     password = getpass.getpass(f"Enter the password of '{username}': ")
 
     # Création de l'objet SRP côté client

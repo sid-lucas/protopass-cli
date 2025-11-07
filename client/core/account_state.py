@@ -7,8 +7,11 @@ from ..utils import logger as log
 from client.utils.logger import CTX, notify_user
 from client.utils.network import api_post, handle_resp
 from Crypto.Cipher import AES
+from Crypto.Hash import SHA256
 import bcrypt
-import hashlib
+
+# TODO : IL FAUT CHIFFRER LA SESSION ID AVANT DE LA STOCKER SUR LE DISQUE, ET LA DECHIFFRER AVANT DE LA STOCKER EN MEMOIRE (SECURITÉ)
+# VOIR MEME TOUT CHIFFRER : AUCUNE CONFIANCE : TOUT CE QUI EST STOCKE SUR LE DISQUE CLIENT EST CHIFFRÉ
 
 class AccountState:
     """
@@ -164,7 +167,7 @@ class AccountState:
         payload = {"session_id": session_id}
         username = cls.username()
         if username:
-            payload["username_hash"] = hashlib.sha256(username.encode()).hexdigest()
+            payload["username_hash"] = SHA256.new(username.encode()).hexdigest()
         return payload
 
     @classmethod
