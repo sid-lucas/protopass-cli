@@ -323,7 +323,33 @@ class AccountState:
 
             cache_value = cache_value_transform(decrypted)
             cache_setter(cache_value)
+            cls._warm_related_secrets(password, salt_b64, data, field_name)
             return return_transform()
+
+    @classmethod
+    def _warm_related_secrets(cls, password, salt_b64, data, loaded_field):
+        """
+        Utilise le même mot de passe pour charger l'autre secret si nécessaire, afin d'éviter une seconde saisie utilisateur.
+        """
+        def _maybe_load(field_name, loader):
+            block = data.get(field_name)
+            if not block:
+                return
+            try:
+                plaintext = cls._decrypt_secret(password, block, salt_b64)
+                loader(plaintext)
+            except Exception:
+                log.get_logger(CTX.DECRYPT, cls.username()).warning(
+                    f"Unable to preload {field_name} from disk."
+                )
+
+        if loaded_field != "private_key" and cls._private_key is None:
+            _maybe_load("private_key", cls.set_private_key)
+
+        if loaded_field != "session" and cls._cached_session_id is None:
+            def _set_session(plaintext):
+                cls.set_session_id(plaintext.decode())
+            _maybe_load("session", _set_session)
 
     # ============================================================
     # Gestion des clés de vault (cache mémoire uniquement)
