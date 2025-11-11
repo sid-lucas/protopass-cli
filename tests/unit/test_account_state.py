@@ -62,12 +62,14 @@ def test_read_valid_json():
     """
     data = {
         "username": "alice",
-        "session_id": "123",
-        "public_key": "fakekey"
+        "public_key": "fakekey",
+        "salt": "c2FsdA==",
+        "private_key": {"enc": "ZmFrZQ==", "nonce": "bm9uY2U=", "tag": "dGFn"},
+        "session": {"enc": "c2Vzc2lvbg==", "nonce": "bm9uY2U=", "tag": "dGFn"}
     }
     AccountState.PATH.write_text(json.dumps(data))
     result = AccountState._read()
     assert isinstance(result, dict)
     assert result["username"] == "alice"
-    assert result["session_id"] == "123"
     assert result["public_key"] == "fakekey"
+    assert "session" in result and "private_key" in result

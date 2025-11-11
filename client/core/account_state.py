@@ -6,12 +6,34 @@ from pathlib import Path
 from ..utils import logger as log
 from client.utils.logger import CTX, notify_user
 from client.utils.network import api_post, handle_resp
-from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
-import bcrypt
+from client.utils.crypto import (
+    derive_aes_key,
+    encrypt_gcm,
+    decrypt_gcm,
+    b64_block_from_bytes,
+    bytes_from_b64_block,
+)
 
-# TODO : IL FAUT CHIFFRER LA SESSION ID AVANT DE LA STOCKER SUR LE DISQUE, ET LA DECHIFFRER AVANT DE LA STOCKER EN MEMOIRE (SECURITÉ)
-# VOIR MEME TOUT CHIFFRER : AUCUNE CONFIANCE : TOUT CE QUI EST STOCKE SUR LE DISQUE CLIENT EST CHIFFRÉ
+"""
+Structure de account_state.json :
+
+{
+  "username": "...",          // string (en clair)
+  "salt": "...",              // b64
+  "public_key": "...",        // b64
+  "private_key": {
+    "enc": "...",             // b64
+    "nonce": "...",           // b64
+    "tag": "..."              // b64
+  },
+  "session": {
+    "enc": "...",             // b64
+    "nonce": "...",           // b64
+    "tag": "..."              // b64
+  }
+}
+"""
 
 class AccountState:
     """
@@ -31,6 +53,7 @@ class AccountState:
     # ============================================================
     # Lecture et écriture de l'état du compte (fichier local)
     # ============================================================
+
     @classmethod
     def _read(cls):
         logger = log.get_logger(CTX.ACCOUNT_STATE, user="")
@@ -47,18 +70,19 @@ class AccountState:
             return None
 
     @classmethod
-    def save(cls, username, session_id, public_key, private_key_enc, nonce, tag, salt):
+    def save(cls, username, salt, public_key, private_key_block, session_block):
+        """
+        Tous les champs sont des chaines b64
+        """
         logger = log.get_logger(CTX.ACCOUNT_STATE, username)
         cls.PATH.parent.mkdir(parents=True, exist_ok=True)
 
         payload = {
             "username": username,
-            "session_id": session_id,
             "public_key": public_key,
-            "private_key_enc": private_key_enc,
-            "nonce": nonce,
-            "tag": tag,
             "salt": salt,
+            "private_key": private_key_block,
+            "session": session_block,
         }
 
         try:
@@ -71,7 +95,6 @@ class AccountState:
             return False
 
         cls._cached_username = username
-        cls._cached_session_id = session_id
         try:
             cls._cached_public_key = base64.b64decode(public_key)
         except Exception as exc:
@@ -84,8 +107,8 @@ class AccountState:
         if cls.PATH.exists():
             cls.PATH.unlink()
         cls._cached_username = None
-        cls._cached_session_id = None
         cls._cached_public_key = None
+        cls._cached_session_id = None # Ne nettoie pas les bytes en mémoire comme la clé privée... cela peut être une amélioration
         cls.clear_private_key()
         cls.clear_vault_keys()
 
@@ -131,6 +154,7 @@ class AccountState:
 
     @classmethod
     def username(cls):
+        """getter du nom d'utilisateur"""
         # Récupère le username du cache si existe
         if cls._cached_username is not None:
             return cls._cached_username
@@ -139,7 +163,6 @@ class AccountState:
         data = cls._read()
         if not data:
             return None
-
         username = data.get("username")
         if not username:
             return None
@@ -147,33 +170,13 @@ class AccountState:
         return cls._cached_username
 
     @classmethod
-    def session_id(cls):
-        if cls._cached_session_id is not None:
-            return cls._cached_session_id
-        data = cls._read()
-        if not data:
-            return None
-        session_id = data.get("session_id")
-        if not session_id:
-            return None
-        cls._cached_session_id = session_id
-        return cls._cached_session_id
-
-    @classmethod
-    def session_payload(cls):
-        session_id = cls.session_id()
-        if not session_id:
-            return None
-        payload = {"session_id": session_id}
-        username = cls.username()
-        if username:
-            payload["username_hash"] = SHA256.new(username.encode()).hexdigest()
-        return payload
-
-    @classmethod
     def public_key(cls):
+        """getter de la clé publique"""
+        # Récupère la clé publique en cache
         if cls._cached_public_key is not None:
             return cls._cached_public_key
+        
+        # Sinon lit la clé pub stockée sur le disque
         data = cls._read()
         if not data:
             return None
@@ -189,40 +192,36 @@ class AccountState:
             )
             return None
         
+    @classmethod
+    def session_payload(cls):
+        session_id = cls.session_id()
+        if not session_id:
+            return None
+        payload = {"session_id": session_id}
+        username = cls.username()
+        if username:
+            payload["username_hash"] = SHA256.new(username.encode()).hexdigest()
+        return payload
+        
     # ============================================================
     # Gestion de la clé privée : mémoire, cache et déchiffrement
     # ============================================================
-    @classmethod
-    def _decrypt_private_key(cls, password: str, private_key_enc: bytes, nonce: bytes, tag: bytes, salt: bytes):
-        """
-        Déchiffre la clé privée user key avec la clé dérivée bcrypt.
-        """
-        try:
-            # Dérivation de la clé AES via bcrypt
-            aes_key = bcrypt.kdf(
-                password=password.encode(),
-                salt=salt,
-                desired_key_bytes=32,
-                rounds=200  # facteur de coût (à partir de 200 pour de la sécurité basique)
-            )
-            cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-            return cipher.decrypt_and_verify(private_key_enc, tag)
-        except Exception as e:
-            log.get_logger(CTX.DECRYPT, cls.username()).error(f"Unable to decrypt private key: {e}")
-            return None
-
-    @classmethod
-    def set_private_key(cls, key_bytes):
-        cls._private_key = bytearray(key_bytes)
 
     @classmethod
     def private_key(cls):
+        """getter de la clé privée"""
         if cls._private_key is not None:
             return bytes(cls._private_key) 
         return cls._load_private_key_in_mem()
+    
+    @classmethod
+    def set_private_key(cls, key_bytes):
+        """setter de la clé privée"""
+        cls._private_key = bytearray(key_bytes)
 
     @classmethod
     def clear_private_key(cls):
+        """Clean propre de la clé privée en mémoire"""
         if cls._private_key is not None:
             key_obj = cls._private_key
             if isinstance(key_obj, bytearray):
@@ -233,42 +232,103 @@ class AccountState:
     @classmethod
     def _load_private_key_in_mem(cls):
         """
-        Si la private_key n'est plus en mémoire, redemande le mot de passe pour la déchiffrer localement.
+        Recharge la clé privée chiffée du le disque lorsque le cache est vide.
         """
+        return cls._load_secret_from_disk(
+            field_name="private_key",
+            cache_setter=cls.set_private_key,
+            cache_value_transform=lambda decrypted: decrypted,
+            return_transform=lambda: bytes(cls._private_key)
+        )
+
+    # ============================================================
+    # Gestion de la session : cache et déchiffrement
+    # ============================================================
+
+    @classmethod
+    def session_id(cls):
+        """getter de l'id de session"""
+        if cls._cached_session_id is not None:
+            return cls._cached_session_id
+        return cls._load_session_id_in_mem()
+
+    @classmethod
+    def set_session_id(cls, session_id: str):
+        """setter de l'id de session"""
+        cls._cached_session_id = session_id
+
+    @classmethod
+    def _load_session_id_in_mem(cls):
+        """
+        Recharge la session chiffrée du le disque lorsque le cache est vide.
+        """
+        return cls._load_secret_from_disk(
+            field_name="session",
+            cache_setter=cls.set_session_id,
+            cache_value_transform=lambda decrypted: decrypted.decode(),
+            return_transform=lambda: cls._cached_session_id
+        )
+
+
+
+    # ============================================================
+    # Helpers cryptographiques & autres
+    # ============================================================
+
+    @classmethod
+    def _decrypt_secret(cls, password, enc_block_b64, salt_b64):
+        salt = base64.b64decode(salt_b64)
+        ciphertext, nonce, tag = bytes_from_b64_block(enc_block_b64)
+        key = derive_aes_key(password, salt)
+        return decrypt_gcm(key, ciphertext, nonce, tag)
+    
+    @classmethod
+    def _encrypt_secret(cls, password, plaintext: bytes, salt_b64: str):
+        salt = base64.b64decode(salt_b64)
+        key = derive_aes_key(password, salt)
+        ciphertext, nonce, tag = encrypt_gcm(key, plaintext)
+        return b64_block_from_bytes(ciphertext, nonce, tag)
+    
+    @classmethod
+    def _load_secret_from_disk(cls, field_name, cache_setter, cache_value_transform, return_transform):
+        """
+        Mutualise la lecture/déchiffrement d'un secret stocké sur disque.
+        """
+        # Lit le fichier du disque
         logger = log.get_logger(CTX.ACCOUNT_STATE, cls.username())
         data = cls._read()
         if not data:
             logger.error("No local account state found.")
             return None
 
-        for key in ["private_key_enc", "nonce", "tag", "salt"]:
-            if key not in data:
-                logger.error(f"Missing field '{key}' in local account state.")
-                return None
-
-        try:
-            private_key_enc = base64.b64decode(data["private_key_enc"])
-            nonce = base64.b64decode(data["nonce"])
-            tag = base64.b64decode(data["tag"])
-            salt = base64.b64decode(data["salt"])
-        except Exception as e:
-            logger.error(f"Error decoding stored fields: {e}")
+        # Récupère le sel
+        salt_b64 = data.get("salt")
+        secret_block = data.get(field_name)
+        if not salt_b64 or not secret_block:
+            logger.error(f"Missing encrypted {field_name} in local account state.")
             return None
 
-        logger.info("Reloading private key from disk.")
+        # Déchiffre le secret avec le mdp avant de le mettre en cache
+        logger.info(f"Reloading {field_name} from disk.")
         while True:
             password = getpass.getpass("Enter your password: ")
-            decrypted = cls._decrypt_private_key(password, private_key_enc, nonce, tag, salt)
+            try:
+                decrypted = cls._decrypt_secret(password, secret_block, salt_b64)
+            except Exception:
+                log.get_logger(CTX.DECRYPT, cls.username()).error(f"Unable to decrypt {field_name}.")
+                decrypted = None
             if decrypted is None:
                 notify_user("Incorrect password. Try again.")
                 continue
 
-            cls.set_private_key(decrypted)
-            return bytes(cls._private_key) 
+            cache_value = cache_value_transform(decrypted)
+            cache_setter(cache_value)
+            return return_transform()
 
     # ============================================================
     # Gestion des clés de vault (cache mémoire uniquement)
     # ============================================================
+
     @classmethod
     def set_vault_key(cls, vault_id: str, key_bytes: bytes):
         cls._vault_keys[vault_id] = bytearray(key_bytes)

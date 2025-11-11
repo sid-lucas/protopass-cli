@@ -105,7 +105,8 @@ def test_register_login_logout_cycle(monkeypatch, tmp_path, server_app):
     # Vérifie que le fichier local a été créé
     assert AccountState.PATH.exists(), "account_state.json doit exister après login"
     acc_data = json.loads(AccountState.PATH.read_text())
-    assert "session_id" in acc_data, "Le fichier local doit contenir la session"
+    assert "session" in acc_data, "Le fichier local doit contenir la session chiffrée"
+    assert all(key in acc_data["session"] for key in ("enc", "nonce", "tag")), "La session doit être stockée sous forme chiffrée"
 
     # Vérifie que la session est bien créée côté serveur
     sessions_file = tmp_path / "server_data" / "sessions.json"
@@ -399,7 +400,8 @@ def test_session_invalid_local_id(monkeypatch, tmp_path, server_app):
     # Étape 2 : Corrompt le session_id local
     # ----------------------------------------
     data = json.loads(AccountState.PATH.read_text())
-    data["session_id"] = "FAKE_INVALID_SESSION"
+    salt_b64 = data["salt"]
+    data["session"] = AccountState._encrypt_secret("strongpass", b"FAKE_INVALID_SESSION", salt_b64)
     AccountState.PATH.write_text(json.dumps(data))
     # Simule un redémarrage : on vide les caches en mémoire
     AccountState._cached_username = None

@@ -1,17 +1,19 @@
 import getpass
 import base64
-import bcrypt
 import srp
 import re
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
 from Crypto.Hash import SHA256
 from .account_state import AccountState
 from ..utils import logger as log
 from client.utils.network import api_post, handle_resp
 from client.utils.logger import notify_user
 from client.utils.logger import CTX
+from client.utils.crypto import (
+    derive_aes_key,
+    encrypt_gcm,
+    b64_block_from_bytes,
+    generate_userkey_pair,
+)
 
 def is_valid_username(username):
     return re.fullmatch(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{1,18}[a-zA-Z0-9])?$", username) is not None
@@ -53,23 +55,17 @@ def register_account(args):
     vkey_b64 = base64.b64encode(vkey).decode()
 
     # Dériver une clé symétrique via bcrypt en prenant le password et le sel du compte
-    aes_key = bcrypt.kdf(
-        password=password.encode(),
-        salt=salt,
-        desired_key_bytes=32,
-        rounds=200  # facteur de coût (à partir de 200 pour de la sécurité basique)
+    aes_key = derive_aes_key(
+        password=password,
+        salt=salt
     )
 
-    # Génération de la paire de clé RSA (2048 bits) appelée 'user key'
-    # Ces clés seront stockée sur le serveur afin de permettre le multiplateforme
-    key = RSA.generate(2048)
-    private_user_key = key.export_key(format='DER')
-    public_user_key = key.publickey().export_key(format='DER')
+    # Génération de la paire de clé RSA (2048 bits) appelée 'userkey"
+    public_user_key, private_user_key = generate_userkey_pair()
     
     # Chiffrement de la clé privée user key avec la clé dérivée bcrypt
-    nonce = get_random_bytes(12)
-    cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-    private_user_key_enc, tag = cipher.encrypt_and_digest(private_user_key)
+    ciphertext, nonce, tag = encrypt_gcm(aes_key, private_user_key)
+    private_key_block = b64_block_from_bytes(ciphertext, nonce, tag)
 
     # Envoie du nouvel utilisateur au serveur
     payload = {
@@ -77,9 +73,9 @@ def register_account(args):
         "salt": salt_b64,
         "vkey": vkey_b64,
         "public_key": base64.b64encode(public_user_key).decode(),
-        "private_key_enc": base64.b64encode(private_user_key_enc).decode(),
-        "nonce": base64.b64encode(nonce).decode(),
-        "tag": base64.b64encode(tag).decode()
+        "private_key_enc": private_key_block["enc"],
+        "nonce": private_key_block["nonce"],
+        "tag": private_key_block["tag"]
     }
     data = handle_resp(
         api_post("/register", payload),
@@ -176,7 +172,6 @@ def login_account(args):
         notify_user("Incorrect username or password.")
         return
     # Demande au serveur la user key et réceptionne les données
-    #TODO PAS SUR REGARDER SI ON PEU VIRER
     data = handle_resp(
         api_post(
             "/userkey",
@@ -203,17 +198,30 @@ def login_account(args):
         notify_user("Incomplete user key data received from server.")
         return
 
-    private_key_enc = base64.b64decode(private_key_enc_b64)
-    nonce = base64.b64decode(nonce_b64)
-    tag = base64.b64decode(tag_b64)
-
-    private_user_key = AccountState._decrypt_private_key(password, private_key_enc, nonce, tag, salt)
+    private_block = {
+        "enc": private_key_enc_b64,
+        "nonce": nonce_b64,
+        "tag": tag_b64,
+    }
+    try:
+        private_user_key = AccountState._decrypt_secret(password, private_block, salt_b64)
+    except Exception:
+        private_user_key = None
     if private_user_key is None:
         return
 
     # Stockage de l'état du compte pour les prochaines commandes
     AccountState.set_private_key(private_user_key) # clé privée en mémoire volatile
-    if AccountState.save(username, session_id, public_key_b64, private_key_enc_b64, nonce_b64, tag_b64, salt_b64) is False:
+    AccountState.set_session_id(session_id) # idem
+
+    try:
+        session_block = AccountState._encrypt_secret(password, session_id.encode(), salt_b64)
+    except Exception:
+        logger.error("Failed to encrypt session for local storage.")
+        notify_user("Unable to protect local session data.")
+        return
+
+    if AccountState.save(username, salt_b64, public_key_b64, private_block, session_block) is False:
         logger.error("Failed to save account state locally.")
         notify_user("Failed to save account state locally.")
         return
