@@ -108,8 +108,12 @@ def _wipe_sensitive_data():
     if _state.get("username"):
         _state["username"] = None
 
-    # TODO : effacement explicite de la aes_key en mémoire
+    # Effacement propre de la aes_key en mémoire
     global _aes_key
+    if isinstance(_aes_key, bytearray):
+        for i in range(len(_aes_key)):
+            _aes_key[i] = 0
+    _aes_key = None
 
     _state["locked"] = True
     print("[agent] données sensibles effacées.")
@@ -160,7 +164,7 @@ def _op_start(req):
     # dérivation clé AES
     salt = base64.b64decode(salt_b64)
     global _aes_key
-    _aes_key = derive_aes_key(password, salt)
+    _aes_key = bytearray(derive_aes_key(password, salt))
 
     # Mise à jour de l'état global
     _state.update({
