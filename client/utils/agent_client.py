@@ -13,7 +13,7 @@ class AgentClient:
     def _send(self, op: str, data: dict | None = None) -> dict:
         """Envoie une requête JSON et renvoie la réponse décodée."""
         if not self.sock_path.exists():
-            raise ConnectionError("Agent non détecté (socket introuvable).")
+            raise ConnectionError("No agent detected (socket not found)")
 
         payload = {
             "op": op,
@@ -26,7 +26,7 @@ class AgentClient:
             s.sendall((json.dumps(payload) + "\n").encode("utf-8"))
             resp_raw = s.recv(1 << 20)
             if not resp_raw:
-                raise RuntimeError("Réponse vide de l'agent.")
+                raise RuntimeError("Empty response from agent")
             resp = json.loads(resp_raw.decode("utf-8"))
             return resp
 
@@ -35,25 +35,61 @@ class AgentClient:
 #  API publique (utilisées par le CLI)
 # ============================================================
 
-def status(self):
-    """Retourne l'état courant de l'agent."""
-    return self._send("status")
+def status(self, logger=None):
+    """Retourne l'état courant de l'agent, ou None si erreur."""
+    try:
+        resp = self._send("status")
+        if resp.get("status") == "ok":
+            return resp["data"]
+        if logger: logger.error(f"Agent status error: {resp}")
+    except Exception as e:
+        if logger: logger.warning(f"Cannot reach agent: {e}")
+    return None
 
-def start(self, username: str, password: str, salt_b64: str):
+def start(self, username: str, password: str, salt_b64: str, logger=None):
     """Démarre la session agent (dérive et garde la clé AES)."""
-    return self._send("start", {"username": username, "password": password, "salt": salt_b64})
+    try:
+        resp = self._send("start", {"username": username, "password": password, "salt": salt_b64})
+        if resp.get("status") == "ok":
+            if logger: logger.debug("Agent started (master_key en mémoire)")
+            return True
+        if logger: logger.error(f"Agent start failed: {resp}")
+    except Exception as e:
+        if logger: logger.warning(f"Agent start exception: {e}")
+    return False
 
-def shutdown(self):
+def shutdown(self, logger=None):
     """Arrête l'agent (auto-effacement et fermeture)."""
-    return self._send("shutdown")
+    try:
+        resp = self._send("shutdown")
+        if resp.get("status") == "ok":
+            if logger: logger.debug("Agent shutdown successful")
+            return True
+        if logger: logger.error(f"Agent shutdown failed: {resp}")
+    except Exception as e:
+        if logger: logger.warning(f"Agent shutdown exception: {e}")
+    return False
 
-def encrypt(self, plaintext: str | bytes):
-    """Chiffre une donnée avec la clé AES stockée dans l'agent."""
-    if isinstance(plaintext, bytes):
-        plaintext = plaintext.decode("utf-8", "ignore")
-    return self._send("encrypt", {"plaintext": plaintext})
+def encrypt(self, plaintext: str | bytes, logger=None):
+    """Chiffre une donnée avec la clé AES stockée dans l'agent. Retourne un dict ou None."""
+    try:
+        if isinstance(plaintext, bytes):
+            plaintext = plaintext.decode("utf-8", "ignore")
+        resp = self._send("encrypt", {"plaintext": plaintext})
+        if resp.get("status") == "ok":
+            return resp["data"]
+        if logger: logger.error(f"Agent encrypt failed: {resp}")
+    except Exception as e:
+        if logger: logger.warning(f"Agent encrypt exception: {e}")
+    return None
 
-def decrypt(self, ciphertext_b64: str, nonce_b64: str, tag_b64: str):
-    """Déchiffre une donnée AES-GCM via la clé de l'agent."""
-    return self._send("decrypt", {"ciphertext": ciphertext_b64, "nonce": nonce_b64, "tag": tag_b64})
-
+def decrypt(self, ciphertext_b64: str, nonce_b64: str, tag_b64: str, logger=None):
+    """Déchiffre une donnée AES-GCM via la clé de l'agent. Retourne un dict ou None."""
+    try:
+        resp = self._send("decrypt", {"ciphertext": ciphertext_b64, "nonce": nonce_b64, "tag": tag_b64})
+        if resp.get("status") == "ok":
+            return resp["data"]
+        if logger: logger.error(f"Agent decrypt failed: {resp}")
+    except Exception as e:
+        if logger: logger.warning(f"Agent decrypt exception: {e}")
+    return None

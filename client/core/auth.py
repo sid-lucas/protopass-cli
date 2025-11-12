@@ -65,24 +65,27 @@ def register_account(args):
         hash_alg=srp.SHA256,
         ng_type=srp.NG_2048
     )
-    # Encode en b64
     salt_b64 = base64.b64encode(salt).decode()
     vkey_b64 = base64.b64encode(vkey).decode()
 
-    # Dériver une clé symétrique via bcrypt en prenant le password et le sel du compte
-    aes_key = derive_aes_key(
-        password=password,
-        salt=salt
-    )
+    # Démarre l'agent, il dérive la aes_key
+    AgentClient().start(username, password, salt_b64, logger)
 
     # Génération de la paire de clé RSA (2048 bits) appelée 'userkey"
     public_user_key, private_user_key = generate_userkey_pair()
     
-    # Chiffrement de la clé privée user key avec la clé dérivée bcrypt
-    ciphertext, nonce, tag = encrypt_gcm(aes_key, private_user_key)
-    private_key_block = b64_block_from_bytes(ciphertext, nonce, tag)
+    # Chiffrement de la clé privée user key avec l'agent (qui contient la aes_key)    
+    enc_data = AgentClient().encrypt(private_user_key, logger)
+    private_key_block = {
+        "enc": enc_data["ciphertext"],
+        "nonce": enc_data["nonce"],
+        "tag": enc_data["tag"],
+    }
 
-    # Envoie du nouvel utilisateur au serveur
+    # Arrêt immédiat de l’agent après register
+    AgentClient().shutdown(logger)
+
+    # Envoie données du nouvel utilisateur au serveur
     payload = {
         "username": username_hash,
         "salt": salt_b64,
@@ -100,7 +103,7 @@ def register_account(args):
     if data is None:
         notify_user("Registration failed. Please check logs for details.")
         return
-
+    
     logger.info(f"Account '{username}' has been created")
     notify_user(f"Account '{username}' created successfully.")
 
@@ -213,6 +216,8 @@ def login_account(args):
         if data is None:
             notify_user("Failed to retrieve user key from server.")
             return
+        
+        AgentClient().start(username, password, salt_b64, logger)
 
         # Réception des données de la clé privée chiffrée
         user_key = data.get("user_key", {})
@@ -262,17 +267,6 @@ def login_account(args):
         logger.error("Failed to save account state locally")
         notify_user("An error occured. Please try again.")
         return
-    
-    # Démarrage de l'agent local sécurisé 
-    try:
-        agent = AgentClient()
-        resp = agent.start(username, password, salt_b64)
-        if resp.get("status") == "ok":
-            logger.debug("Local agent started (aes_key in memory)")
-        else:
-            logger.error(f"An error occured with local agent: {resp}")
-    except Exception as e:
-        logger.warning(f"Cannot start the local agent: {e}")
 
     logger.info(f"User '{username}' successfully logged")
     notify_user(f"Login successful. Welcome {username}!")
@@ -303,16 +297,6 @@ def logout_account(args):
     # Nettoyage de la session locale
     AccountState.clear()
 
-    # Extinction propre de l'agent local
-    try:
-        agent = AgentClient()
-        resp = agent.shutdown()
-        if resp.get("status") == "ok":
-            logger.debug("Local agent stopped properly")
-        else:
-            logger.error(f"An error occured with local agent: {resp}")
-    except Exception:
-        logger.warning("No active agent found")
 
     logger.info(f"User '{username}' logged out")
     notify_user("Logout successful. Session terminated.")
