@@ -319,14 +319,15 @@ class AccountState:
         )
         if not resp or "plaintext" not in resp: return None
 
-        return resp["plaintext"].encode("utf-8")
+        return base64.b64decode(resp["plaintext"])
         
     @classmethod
     def encrypt_secret(cls, plaintext: bytes):
         """Chiffre un bloc via l'agent actif."""
         agent = AgentClient()
+        payload = base64.b64encode(plaintext).decode()
 
-        resp = agent.encrypt(plaintext)
+        resp = agent.encrypt(payload)
         if not resp: return None
 
         return {

@@ -78,12 +78,8 @@ def register_account(args):
     public_user_key, private_user_key = generate_userkey_pair()
     
     # Chiffrement de la clé privée user key avec l'agent (qui contient la aes_key)    
-    enc_data = agent.encrypt(private_user_key, logger)
-    if not enc_data:
-        agent.shutdown(logger)
-        logger.error("Agent encryption failed during registration")
-        notify_user("Unable to protect the private key. Please try again.")
-        return
+    private_key_b64 = base64.b64encode(private_user_key).decode()
+    enc_data = agent.encrypt(private_key_b64, logger)
     private_key_block = {
         "enc": enc_data["ciphertext"],
         "nonce": enc_data["nonce"],
@@ -247,13 +243,12 @@ def login_account(args):
             private_block["tag"],
             logger
         )
-
         if not data:
             if attempt < MAX_PASSWORD_ATTEMPTS - 1:
                 notify_user("Incorrect username or password. Try again.")
             continue
-
-        private_user_key = data["plaintext"].encode("utf-8")
+        
+        private_user_key = base64.b64decode(data.get("plaintext"))
 
         login_success = True
         break
@@ -268,7 +263,8 @@ def login_account(args):
     AccountState.set_session_id(session_id) # idem
 
     # Chiffrement du bloc de session via agent
-    enc_data = agent.encrypt(session_id.encode(), logger)
+    session_id_b64 = base64.b64encode(session_id.encode()).decode()
+    enc_data = agent.encrypt(session_id_b64, logger)
     session_block = {
         "enc": enc_data["ciphertext"],
         "nonce": enc_data["nonce"],

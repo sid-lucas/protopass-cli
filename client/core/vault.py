@@ -182,8 +182,6 @@ def create_vault(_args):
     # Génère une clé symétrique de 256bits pour le vault
     vault_key = os.urandom(32)
 
-    
-
     # signature de la clé du vault avec la clé privée de l'utilisateur
     vault_key_hash = SHA256.new(vault_key).digest()
     vault_signature = pkcs1_15.new(RSA.import_key(private_key)).sign(SHA256.new(vault_key_hash))
