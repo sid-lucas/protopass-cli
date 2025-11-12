@@ -1,10 +1,15 @@
-import base64
-import bcrypt
+import hmac, hashlib, base64, json, bcrypt
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 
 KDF_ROUNDS = 300
+
+def canonical_json(obj: dict) -> bytes:
+    return json.dumps(obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False).encode('utf-8')
+
+def hmac_b64(key: bytes, data: bytes) -> str:
+    return base64.b64encode(hmac.new(key, data, hashlib.sha256).digest()).decode('ascii')
 
 def derive_aes_key(password: str, salt: bytes, rounds: int = KDF_ROUNDS) -> bytes:
     return bcrypt.kdf(

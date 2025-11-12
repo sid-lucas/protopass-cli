@@ -232,7 +232,7 @@ def login_account(args):
             "tag": tag_b64,
         }
         try:
-            private_user_key = AccountState._decrypt_secret(password, private_block, salt_b64)
+            private_user_key = AccountState.decrypt_secret(password, private_block, salt_b64)
         except Exception:
             private_user_key = None
         if private_user_key is None:
@@ -252,13 +252,13 @@ def login_account(args):
     AccountState.set_session_id(session_id) # idem
 
     try:
-        session_block = AccountState._encrypt_secret(password, session_id.encode(), salt_b64)
+        session_block = AccountState.encrypt_secret(password, session_id.encode(), salt_b64)
     except Exception:
         logger.error("Failed to encrypt session for local storage.")
         notify_user("Unable to protect local session data.")
         return
 
-    if AccountState.save(username, salt_b64, public_key_b64, private_block, session_block) is False:
+    if AccountState.save(username, salt_b64, public_key_b64, private_block, session_block, password) is False:
         logger.error("Failed to save account state locally.")
         notify_user("Failed to save account state locally.")
         return

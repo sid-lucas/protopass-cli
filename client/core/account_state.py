@@ -8,11 +8,10 @@ from client.utils.logger import CTX, notify_user
 from client.utils.network import api_post, handle_resp
 from Crypto.Hash import SHA256
 from client.utils.crypto import (
+    hmac_b64, canonical_json,
     derive_aes_key,
-    encrypt_gcm,
-    decrypt_gcm,
-    b64_block_from_bytes,
-    bytes_from_b64_block,
+    encrypt_gcm, decrypt_gcm,
+    b64_block_from_bytes, bytes_from_b64_block,
 )
 
 """
@@ -37,7 +36,6 @@ Structure de account_state.json :
 
 MAX_UNLOCK_ATTEMPTS = 3
 
-
 class AccountState:
     """
     Stocke l'état local du compte : informations persistantes associées à l'utilisateur
@@ -60,20 +58,39 @@ class AccountState:
     @classmethod
     def _read(cls):
         logger = log.get_logger(CTX.ACCOUNT_STATE, user="")
+        # Vérification de l'existence du fichier
         if not cls.PATH.exists():
             logger.debug("Local account_state.json is missing.")
             return None
 
+        # Lecture du fichier .json
         try:
-            return json.loads(cls.PATH.read_text())
+            data = json.loads(cls.PATH.read_text())
         except Exception:
             cls.clear()
             logger.error("Unable to decode account_state.json, file inexistant or corrupted.")
             notify_user("Local session data is invalid. Please log in again.")
             return None
+        
+        # Vérification de l'intégrité du fichier .json
+        integrity = data.get("integrity")
+        if integrity and "value" in integrity:
+            salt_b64 = data.get("salt")
+            mac_key = derive_aes_key(password=getpass.getpass("Enter your password: "), salt=base64.b64decode(salt_b64))
+            data_no_integrity = {k: v for k, v in data.items() if k != "integrity"}
+            mac_computed = hmac_b64(mac_key, canonical_json(data_no_integrity))
+            if mac_computed != integrity["value"]:
+                logger.error("Integrity check failed for account_state.json")
+                notify_user("Local account data was tampered with. Session cleared.")
+                cls.clear()
+                return None
+
+        return data
+        
+
 
     @classmethod
-    def save(cls, username, salt, public_key, private_key_block, session_block):
+    def save(cls, username, salt, public_key, private_key_block, session_block, pwd):
         """
         Tous les champs sont des chaines b64
         """
@@ -88,6 +105,13 @@ class AccountState:
             "session": session_block,
         }
 
+        # dérive la même clé que pour la clé maîtresse, pour signer le payload
+        aes_key = derive_aes_key(password=pwd, salt=base64.b64decode(salt))
+        mac = hmac_b64(aes_key, canonical_json(payload))
+        # Ajout du HMAC dans le json
+        payload["integrity"] = {"value": mac, "algo": "HMAC-SHA256"}
+
+        # Création du fichier .json sur le disque avec permissions restrictives
         try:
             payload_json = json.dumps(payload, indent=2)
             fd = os.open(str(cls.PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -97,6 +121,7 @@ class AccountState:
             logger.error(f"Unable to persist account state: {exc}")
             return False
 
+        # Mise des informations en cache directement
         cls._cached_username = username
         try:
             cls._cached_public_key = base64.b64decode(public_key)
@@ -279,14 +304,14 @@ class AccountState:
     # ============================================================
 
     @classmethod
-    def _decrypt_secret(cls, password, enc_block_b64, salt_b64):
+    def decrypt_secret(cls, password, enc_block_b64, salt_b64):
         salt = base64.b64decode(salt_b64)
         ciphertext, nonce, tag = bytes_from_b64_block(enc_block_b64)
         key = derive_aes_key(password, salt)
         return decrypt_gcm(key, ciphertext, nonce, tag)
     
     @classmethod
-    def _encrypt_secret(cls, password, plaintext: bytes, salt_b64: str):
+    def encrypt_secret(cls, password, plaintext: bytes, salt_b64: str):
         salt = base64.b64decode(salt_b64)
         key = derive_aes_key(password, salt)
         ciphertext, nonce, tag = encrypt_gcm(key, plaintext)
