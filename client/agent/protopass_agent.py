@@ -65,6 +65,8 @@ def _handle(line: str):
             "status": _op_status,
             "start": _op_start,
             "shutdown": _op_shutdown,
+            "encrypt": _op_encrypt,
+            "decrypt": _op_decrypt,
         }
         
         if op not in ops:
