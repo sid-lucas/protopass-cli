@@ -15,6 +15,8 @@ from client.utils.crypto import (
     generate_userkey_pair,
 )
 
+MAX_PASSWORD_ATTEMPTS = 3
+
 def is_valid_username(username):
     return re.fullmatch(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{1,18}[a-zA-Z0-9])?$", username) is not None
 
@@ -107,107 +109,130 @@ def login_account(args):
     logger.info(f"Tried to login as '{username}'")
 
     username_hash = SHA256.new(username.encode()).hexdigest()
-    password = getpass.getpass(f"Enter the password of '{username}': ")
+    
+    login_success = False
+    password = None
+    session_id = None
+    salt_b64 = None
+    public_key_b64 = None
+    private_block = None
+    private_user_key = None
 
-    # Création de l'objet SRP côté client
-    usr = srp.User(
-        username_hash.encode(),
-        password.encode(),
-        hash_alg=srp.SHA256,
-        ng_type=srp.NG_2048
-    )
+    # Autorise plusieurs tentatives de saisie avant d'abandonner
+    for attempt in range(MAX_PASSWORD_ATTEMPTS):
+        password = getpass.getpass(f"Enter the password of '{username}': ")
 
-    # client calcul sa clé publique (A)
-    # la première valeur de retour est inutilisée
-    # '_' est utilisé par convention pour indiquer cela
-    _, A = usr.start_authentication()
+        # Création de l'objet SRP côté client
+        usr = srp.User(
+            username_hash.encode(),
+            password.encode(),
+            hash_alg=srp.SHA256,
+            ng_type=srp.NG_2048
+        )
 
+        # client calcul sa clé publique (A)
+        # la première valeur de retour est inutilisée
+        # '_' est utilisé par convention pour indiquer cela
+        _, A = usr.start_authentication()
 
-    # Envoi au serveur le username et la clé publique (A)
-    payload = {
-        "username": username_hash,
-        "A": base64.b64encode(A).decode()
-    }
-    data = handle_resp(
-        api_post("/srp/start", payload, user=username),
-        required_fields=["salt", "B"],
-        context=CTX.SRP_START,
-        user=username
-    )
-    if data is None:
-        notify_user("Incorrect username or password. Try again.")
-        return
-
-    # Réception du sel et clé publique (B) du serveur
-    salt_b64 = data["salt"]
-    salt = base64.b64decode(salt_b64)
-    B = base64.b64decode(data["B"])
-
-    # Validation du challenge
-    M = usr.process_challenge(salt, B)
-
-    # Envoi au serveur du challenge complété (M)
-    payload = {
-        "username": username_hash,
-        "M": base64.b64encode(M).decode()
-    }
-    data = handle_resp(
-        api_post("/srp/verify", payload, user=username),
-        required_fields=["HAMK", "session_id"],
-        context=CTX.SRP_VERIFY,
-        user=username
-    )
-    if data is None:
-        notify_user("Incorrect username or password. Try again.")
-        return
-
-    # Réception de la preuve d'authentification finale (HAMK)
-    HAMK = base64.b64decode(data["HAMK"])
-
-    # Validation finale de la session SRP
-    session_id = data.get("session_id")
-    usr.verify_session(HAMK)
-    if not usr.authenticated() or not session_id:
-        logger.error("Incorrect username or password (SRP verification failed).")
-        notify_user("Incorrect username or password.")
-        return
-    # Demande au serveur la user key et réceptionne les données
-    data = handle_resp(
-        api_post(
-            "/userkey",
-            {"session_id": session_id, "username_hash": username_hash},
+        # Envoi au serveur le username et la clé publique (A)
+        payload = {
+            "username": username_hash,
+            "A": base64.b64encode(A).decode()
+        }
+        data = handle_resp(
+            api_post("/srp/start", payload, user=username),
+            required_fields=["salt", "B"],
+            context=CTX.SRP_START,
             user=username
-        ),
-        required_fields=["user_key"],
-        context=CTX.FETCH_USER_KEY,
-        user=username
-    )
-    if data is None:
-        notify_user("Failed to retrieve user key from server.")
-        return
+        )
+        if data is None:
+            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                notify_user("Incorrect username or password. Try again.")
+            continue
 
-    # Réception des données de la clé privée chiffrée
-    user_key = data.get("user_key", {})
-    public_key_b64 = user_key.get("public_key")
-    private_key_enc_b64 = user_key.get("private_key_enc")
-    nonce_b64 = user_key.get("nonce")
-    tag_b64 = user_key.get("tag")
+        # Réception du sel et clé publique (B) du serveur
+        salt_b64 = data["salt"]
+        salt = base64.b64decode(salt_b64)
+        B = base64.b64decode(data["B"])
 
-    if not all([public_key_b64, private_key_enc_b64, nonce_b64, tag_b64]):
-        logger.error("Incomplete user key data from server.")
-        notify_user("Incomplete user key data received from server.")
-        return
+        # Validation du challenge
+        M = usr.process_challenge(salt, B)
 
-    private_block = {
-        "enc": private_key_enc_b64,
-        "nonce": nonce_b64,
-        "tag": tag_b64,
-    }
-    try:
-        private_user_key = AccountState._decrypt_secret(password, private_block, salt_b64)
-    except Exception:
-        private_user_key = None
-    if private_user_key is None:
+        # Envoi au serveur du challenge complété (M)
+        payload = {
+            "username": username_hash,
+            "M": base64.b64encode(M).decode()
+        }
+        data = handle_resp(
+            api_post("/srp/verify", payload, user=username),
+            required_fields=["HAMK", "session_id"],
+            context=CTX.SRP_VERIFY,
+            user=username
+        )
+        if data is None:
+            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                notify_user("Incorrect username or password. Try again.")
+            continue
+
+        # Réception de la preuve d'authentification finale (HAMK)
+        HAMK = base64.b64decode(data["HAMK"])
+
+        # Validation finale de la session SRP
+        session_id = data.get("session_id")
+        usr.verify_session(HAMK)
+        if not usr.authenticated() or not session_id:
+            logger.error("Incorrect username or password (SRP verification failed).")
+            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                notify_user("Incorrect username or password. Try again.")
+            continue
+
+        # Demande au serveur la user key et réceptionne les données
+        data = handle_resp(
+            api_post(
+                "/userkey",
+                {"session_id": session_id, "username_hash": username_hash},
+                user=username
+            ),
+            required_fields=["user_key"],
+            context=CTX.FETCH_USER_KEY,
+            user=username
+        )
+        if data is None:
+            notify_user("Failed to retrieve user key from server.")
+            return
+
+        # Réception des données de la clé privée chiffrée
+        user_key = data.get("user_key", {})
+        public_key_b64 = user_key.get("public_key")
+        private_key_enc_b64 = user_key.get("private_key_enc")
+        nonce_b64 = user_key.get("nonce")
+        tag_b64 = user_key.get("tag")
+
+        if not all([public_key_b64, private_key_enc_b64, nonce_b64, tag_b64]):
+            logger.error("Incomplete user key data from server.")
+            notify_user("Incomplete user key data received from server.")
+            return
+
+        private_block = {
+            "enc": private_key_enc_b64,
+            "nonce": nonce_b64,
+            "tag": tag_b64,
+        }
+        try:
+            private_user_key = AccountState._decrypt_secret(password, private_block, salt_b64)
+        except Exception:
+            private_user_key = None
+        if private_user_key is None:
+            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                notify_user("Incorrect username or password. Try again.")
+            continue
+
+        login_success = True
+        break
+
+    if not login_success:
+        notify_user("Incorrect username or password.")
         return
 
     # Stockage de l'état du compte pour les prochaines commandes
