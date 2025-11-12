@@ -14,7 +14,9 @@ Garde en mémoire la master_key et exécute les opérations sensibles pour le cl
 APP_DIR = Path.home() / ".protopass"
 SOCK_PATH = APP_DIR / "agent.sock"
 TTL = 300 # 5 minutes d'inactivité = auto-destruction
+
 _aes_key = None
+_ttl_timer = None
 
 # État interne de l'agent
 _running = True
@@ -114,9 +116,18 @@ def _wipe_sensitive_data():
 
 def _schedule_auto_shutdown(ttl):
     """Planifie un arrêt automatique après TTL secondes."""
-    timer = threading.Timer(ttl, lambda: _op_shutdown())
-    timer.daemon = True
-    timer.start()
+    global _ttl_timer
+    if _ttl_timer:
+        _ttl_timer.cancel() # annule l’ancien timer
+        _ttl_timer = None
+
+    def _expire():
+        print(f"[agent] inactif depuis {ttl}s - arrêt automatique.")
+        _op_shutdown()
+
+    _ttl_timer = threading.Timer(ttl, _expire)
+    _ttl_timer.daemon = True
+    _ttl_timer.start()
 
 def _sig(_s,_f):
     """Gestion du signal SIGINT/SIGTERM -> arrêt propre."""
@@ -195,7 +206,13 @@ def _op_encrypt(req):
     if isinstance(plaintext, str):
         plaintext = plaintext.encode("utf-8")
 
+    # Chiffre
     nonce, ciphertext, tag = encrypt_gcm(_aes_key, plaintext)
+
+    # Reset le TTL
+    _schedule_auto_shutdown(_state["ttl"])
+
+    # Réponse au CLI
     return {
         "status": "ok",
         "data": {
@@ -226,7 +243,13 @@ def _op_decrypt(req):
     nonce = base64.b64decode(nonce_b64)
     tag = base64.b64decode(tag_b64)
 
+    # Déchiffre
     plaintext = decrypt_gcm(_aes_key, nonce, ciphertext, tag)
+
+    # Reset le TTL
+    _schedule_auto_shutdown(_state["ttl"])
+
+    # Réponse au CLI
     return {
         "status": "ok",
         "data": {"plaintext": plaintext.decode("utf-8")},
