@@ -55,7 +55,6 @@ class AccountState:
     def _read(cls):
         logger = log.get_logger(CTX.ACCOUNT_STATE, user="")
         if not cls.PATH.exists():
-            logger.debug("Local account_state.json is missing")
             return None
 
         try:
@@ -344,7 +343,7 @@ class AccountState:
         logger = log.get_logger(CTX.ACCOUNT_STATE, cls.username())
         data = cls._read()
         if not data:
-            logger.error("No local account state found")
+            logger.debug("No local account state found")
             return None
 
         secret_block = data.get(field_name)

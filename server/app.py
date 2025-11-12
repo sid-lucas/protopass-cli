@@ -61,7 +61,7 @@ def register():
 
     # Succès, création de l'utilisateur
     return make_resp(
-        "ok", "Register", "user created successfully", 201,
+        "ok", "Register", f"Account with hash:'{username[:8]}...' created successfully", 201,
         data={"username": username}
     )
 

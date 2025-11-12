@@ -50,7 +50,6 @@ def _fetch_vault_rows():
         return None
     vaults = data["vaults"]
     if len(vaults) == 0:
-        logger.info("No vaults found.")
         notify_user("No vaults found.")
         return None
     

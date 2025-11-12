@@ -51,7 +51,7 @@ _formatter = _UserAwareFormatter(
 
 _logger = logging.getLogger("protopass.client")
 if not _logger.handlers:
-    _logger.setLevel(logging.INFO)
+    _logger.setLevel(logging.DEBUG)
     file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
     file_handler.setFormatter(_formatter)
     _logger.addHandler(file_handler)

@@ -112,7 +112,6 @@ def register_account(args):
         notify_user("Registration failed. Please check logs for details.")
         return
     
-    logger.info(f"Account '{username}' has been created")
     notify_user(f"Account '{username}' created successfully.")
 
 def login_account(args):

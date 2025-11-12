@@ -1,8 +1,10 @@
+import logging
 import requests
 from client.utils import logger as log
 from client.utils.logger import CTX
 
 SERVER_URL = "http://127.0.0.1:5000"
+DEBUG_CONTEXTS = {CTX.SESSION_VERIFY, CTX.SRP_START, CTX.SRP_VERIFY}
 
 # Format des réponses JSON attendues du serveur :
 #{
@@ -83,7 +85,9 @@ def handle_resp(resp, required_fields=None, context=CTX.NETWORK, user=None):
         return None
 
     if status == "ok":
-        logger.info(payload.get("message", "operation successful"))
+        message = payload.get("message", "operation successful")
+        level = logging.DEBUG if payload_context in DEBUG_CONTEXTS else logging.INFO
+        logger.log(level, message)
         data = payload.get("data", {})
 
         # Vérifie les champs requis uniquement en cas de succès
