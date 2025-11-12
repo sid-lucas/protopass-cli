@@ -1,18 +1,21 @@
-import os, json, socket, signal, sys, time, errno
+import os, json, socket, signal, sys, time, errno, threading, base64
 from pathlib import Path
+from client.utils.crypto import derive_aes_key
 
 """
 Protopass Agent — Processus local sécurisé
 Garde en mémoire la master_key et exécute les opérations sensibles pour le client CLI.
 """
 
-# Constantes globales
+# Globales
 APP_DIR = Path.home() / ".protopass"
 SOCK_PATH = APP_DIR / "agent.sock"
+TTL = 300 # 5 minutes d'inactivité = auto-destruction
+_aes_key = None
 
 # État interne de l'agent
 _running = True
-_state = {"locked": True, "username": None, "ttl": None, "since": int(time.time())}
+_state = {"locked": True, "username": None, "ttl": TTL, "since": int(time.time())}
 
 # ============================================================
 #  Gestion de l'agent
@@ -57,8 +60,7 @@ def _handle(line: str):
         # Dictionnaire de dispatch : plus clair, extensible
         ops = {
             "status": _op_status,
-            "unlock": _op_unlock,
-            "lock": _op_lock,
+            "start": _op_start,
             "shutdown": _op_shutdown,
         }
         
@@ -94,6 +96,23 @@ def _serve(sock):
             resp = _handle(line) # Traite la requête
             conn.sendall((json.dumps(resp) + "\n").encode("utf-8"))
 
+def _wipe_sensitive_data():
+    """Efface toute donnée sensible avant arrêt."""
+    if _state.get("username"):
+        _state["username"] = None
+
+    # TODO : effacement explicite de la aes_key en mémoire
+    global _aes_key
+
+    _state["locked"] = True
+    print("[agent] données sensibles effacées.")
+
+def _schedule_auto_shutdown(ttl):
+    """Planifie un arrêt automatique après TTL secondes."""
+    timer = threading.Timer(ttl, lambda: _op_shutdown())
+    timer.daemon = True
+    timer.start()
+
 def _sig(_s,_f):
     """Gestion du signal SIGINT/SIGTERM -> arrêt propre."""
     global _running; _running = False
@@ -106,33 +125,54 @@ def _op_status(req):
     """Retourne l'état actuel de l'agent."""
     return {"status": "ok", "data": _state}
 
-def _op_unlock(req):
-    """Simule un déverrouillage"""
-    user = req.get("data", {}).get("username")
-    if not user:
-        return {"status": "error", "data": {"code": "ERR_MISSING_USER"}}
+def _op_start(req):
+    """
+    Démarre la session sécurisée de l'agent.
+    - Reçoit les infos utilisateur et le mot de passe
+    - Dérive la clé 'aes_key' en fonction du mot de pase
+    - Démarre le TTL d'auto-clean
+    """
+    # Récupération des paramètres envoyés par le client
+    user = req["data"]["username"]
+    password = req["data"]["password"]
+    salt_b64 = req["data"]["salt"]
 
+    # Validation des entrées
+    if not user or not password or not salt_b64:
+        return {"status": "error", "data": {"code": "ERR_MISSING_CREDENTIALS"}}
+
+    # dérivation clé AES
+    salt = base64.b64decode(salt_b64)
+    global _aes_key
+    _aes_key = derive_aes_key(password, salt)
+
+    # Mise à jour de l'état global
     _state.update({
         "locked": False,
         "username": user,
-        "since": int(time.time())
+        "since": int(time.time()),
+        "ttl": TTL, # TTL 5 min par défaut
     })
-    return {"status": "ok", "data": {"message": f"unlocked (stub) for {user}"}}
 
-def _op_lock(req):
-    """Verrouille l'agent"""
-    _state.update({
-        "locked": True,
-        "username": None,
-        "since": int(time.time())
-    })
-    return {"status": "ok", "data": {"message": "locked"}}
+    print(f"[agent] session active pour {user}")
 
-def _op_shutdown(req):
-    """Ferme proprement l'agent."""
+    # Planifie un auto-shutdown quand le TTL expire
+    _schedule_auto_shutdown(_state["ttl"])
+
+    return {"status": "ok", "data": {"message": f"session started for {user}"}}
+
+def _op_shutdown(req=None):
+    """
+    Termine proprement l'agent :
+    - Efface les données sensibles
+    - Ferme le socket et quitte le process
+    """
     global _running
     _running = False
-    return {"status": "ok", "data": {"message": "bye"}}
+    _wipe_sensitive_data()
+
+    print("[agent] shutdown demandé.")
+    return {"status": "ok", "data": {"message": "agent shutting down"}}
 
 # ============================================================
 #  main
