@@ -401,7 +401,7 @@ def test_session_invalid_local_id(monkeypatch, tmp_path, server_app):
     # ----------------------------------------
     data = json.loads(AccountState.PATH.read_text())
     salt_b64 = data["salt"]
-    data["session"] = AccountState._encrypt_secret("strongpass", b"FAKE_INVALID_SESSION", salt_b64)
+    data["session"] = AccountState.encrypt_secret("strongpass", b"FAKE_INVALID_SESSION", salt_b64)
     AccountState.PATH.write_text(json.dumps(data))
     # Simule un redémarrage : on vide les caches en mémoire
     AccountState._cached_username = None
