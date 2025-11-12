@@ -20,7 +20,7 @@ _ttl_timer = None
 
 # État interne de l'agent
 _running = True
-_state = {"locked": True, "username": None, "ttl": TTL, "since": int(time.time())}
+_state = {"username": None, "ttl": TTL, "since": int(time.time())}
 
 # ============================================================
 #  Gestion de l'agent
@@ -168,7 +168,6 @@ def _op_start(req):
 
     # Mise à jour de l'état global
     _state.update({
-        "locked": False,
         "username": user,
         "since": int(time.time()),
         "ttl": TTL, # TTL 5 min par défaut

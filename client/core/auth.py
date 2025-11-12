@@ -69,13 +69,14 @@ def register_account(args):
     vkey_b64 = base64.b64encode(vkey).decode()
 
     # Démarre l'agent, il dérive la aes_key
-    AgentClient().start(username, password, salt_b64, logger)
+    agent = AgentClient()
+    agent.start(username, password, salt_b64, logger)
 
     # Génération de la paire de clé RSA (2048 bits) appelée 'userkey"
     public_user_key, private_user_key = generate_userkey_pair()
     
     # Chiffrement de la clé privée user key avec l'agent (qui contient la aes_key)    
-    enc_data = AgentClient().encrypt(private_user_key, logger)
+    enc_data = agent.encrypt(private_user_key, logger)
     private_key_block = {
         "enc": enc_data["ciphertext"],
         "nonce": enc_data["nonce"],
@@ -83,7 +84,7 @@ def register_account(args):
     }
 
     # Arrêt immédiat de l’agent après register
-    AgentClient().shutdown(logger)
+    agent.shutdown(logger)
 
     # Envoie données du nouvel utilisateur au serveur
     payload = {
@@ -216,56 +217,63 @@ def login_account(args):
         if data is None:
             notify_user("Failed to retrieve user key from server.")
             return
-        
-        AgentClient().start(username, password, salt_b64, logger)
 
         # Réception des données de la clé privée chiffrée
         user_key = data.get("user_key", {})
         public_key_b64 = user_key.get("public_key")
-        private_key_enc_b64 = user_key.get("private_key_enc")
-        nonce_b64 = user_key.get("nonce")
-        tag_b64 = user_key.get("tag")
-
-        if not all([public_key_b64, private_key_enc_b64, nonce_b64, tag_b64]):
-            logger.error("Incomplete user key data from server")
-            notify_user("Incomplete user key data received from server.")
-            return
-
         private_block = {
-            "enc": private_key_enc_b64,
-            "nonce": nonce_b64,
-            "tag": tag_b64,
+            "enc": user_key.get("private_key_enc"),
+            "nonce": user_key.get("nonce"),
+            "tag": user_key.get("tag"),
         }
-        try:
-            private_user_key = AccountState.decrypt_secret(password, private_block, salt_b64)
-        except Exception:
-            private_user_key = None
-        if private_user_key is None:
+
+        # Démarre l'agent, il dérive la aes_key
+        agent = AgentClient()
+        if not agent.start(username, password, salt_b64, logger):
             if attempt < MAX_PASSWORD_ATTEMPTS - 1:
                 notify_user("Incorrect username or password. Try again.")
             continue
+
+        # Déchiffrement via l’agent
+        data = agent.decrypt(
+            private_block["enc"],
+            private_block["nonce"],
+            private_block["tag"],
+            logger
+        )
+
+        if not data:
+            agent.shutdown(logger)
+            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                notify_user("Incorrect username or password. Try again.")
+            continue
+
+        private_user_key = data["plaintext"].encode("utf-8")
 
         login_success = True
         break
 
     if not login_success:
         notify_user("Too many incorrect password attempts.")
+        agent.shutdown(logger)
         return
 
     # Stockage de l'état du compte pour les prochaines commandes
     AccountState.set_private_key(private_user_key) # clé privée en mémoire volatile
     AccountState.set_session_id(session_id) # idem
 
-    try:
-        session_block = AccountState.encrypt_secret(password, session_id.encode(), salt_b64)
-    except Exception:
-        logger.error("Failed to encrypt session for local storage")
-        notify_user("Unable to protect local session data.")
-        return
+    # Chiffrement du bloc de session via agent
+    enc_data = agent.encrypt(session_id.encode(), logger)
+    session_block = {
+        "enc": enc_data["ciphertext"],
+        "nonce": enc_data["nonce"],
+        "tag": enc_data["tag"],
+    }
 
     if AccountState.save(username, salt_b64, public_key_b64, private_block, session_block, password) is False:
         logger.error("Failed to save account state locally")
         notify_user("An error occured. Please try again.")
+        agent.shutdown(logger)
         return
 
     logger.info(f"User '{username}' successfully logged")
@@ -294,9 +302,10 @@ def logout_account(args):
         logger.error("Failed to revoke session on server")
         return
 
-    # Nettoyage de la session locale
+    # Nettoyage de la session locale et shutdown de l'agent
     AccountState.clear()
-
+    agent = AgentClient()
+    agent.shutdown(logger)
 
     logger.info(f"User '{username}' logged out")
     notify_user("Logout successful. Session terminated.")
