@@ -70,13 +70,21 @@ def register_account(args):
 
     # Démarre l'agent, il dérive la aes_key
     agent = AgentClient()
-    agent.start(username, password, salt_b64, logger)
+    if not agent.start(username, password, salt_b64, logger):
+        logger.error("Failed to initialize secure agent during registration")
+        notify_user("Unable to start the secure agent. Please try again.")
+        return
 
     # Génération de la paire de clé RSA (2048 bits) appelée 'userkey"
     public_user_key, private_user_key = generate_userkey_pair()
     
     # Chiffrement de la clé privée user key avec l'agent (qui contient la aes_key)    
     enc_data = agent.encrypt(private_user_key, logger)
+    if not enc_data:
+        agent.shutdown(logger)
+        logger.error("Agent encryption failed during registration")
+        notify_user("Unable to protect the private key. Please try again.")
+        return
     private_key_block = {
         "enc": enc_data["ciphertext"],
         "nonce": enc_data["nonce"],
