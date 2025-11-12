@@ -1,6 +1,9 @@
 import os, json, socket, signal, sys, time, errno, threading, base64
 from pathlib import Path
-from client.utils.crypto import derive_aes_key
+from client.utils.crypto import (
+    derive_aes_key,
+    encrypt_gcm, decrypt_gcm,
+)
 
 """
 Protopass Agent — Processus local sécurisé
@@ -173,6 +176,59 @@ def _op_shutdown(req=None):
 
     print("[agent] shutdown demandé.")
     return {"status": "ok", "data": {"message": "agent shutting down"}}
+
+def _op_encrypt(req):
+    """
+    Chiffre un texte clair à l'aide de la clé _aes_key en mémoire.
+    Renvoie ciphertext, nonce et tag en base64.
+    """
+    global _aes_key
+    if not _aes_key:
+        return {"status": "error", "data": {"code": "ERR_LOCKED"}}
+
+    plaintext = req.get("data", {}).get("plaintext")
+    if not plaintext:
+        return {"status": "error", "data": {"code": "ERR_MISSING_DATA"}}
+
+    if isinstance(plaintext, str):
+        plaintext = plaintext.encode("utf-8")
+
+    nonce, ciphertext, tag = encrypt_gcm(_aes_key, plaintext)
+    return {
+        "status": "ok",
+        "data": {
+            "ciphertext": base64.b64encode(ciphertext).decode(),
+            "nonce": base64.b64encode(nonce).decode(),
+            "tag": base64.b64encode(tag).decode(),
+        },
+    }
+
+def _op_decrypt(req):
+    """
+    Déchiffre un text à l'aide de la clé _aes_key en mémoire.
+    Attend ciphertext, nonce et tag en base64.
+    """
+    global _aes_key
+    if not _aes_key:
+        return {"status": "error", "data": {"code": "ERR_LOCKED"}}
+
+    data = req.get("data", {})
+    ciphertext_b64 = data.get("ciphertext")
+    nonce_b64 = data.get("nonce")
+    tag_b64 = data.get("tag")
+
+    if not ciphertext_b64 or not nonce_b64 or not tag_b64:
+        return {"status": "error", "data": {"code": "ERR_MISSING_DATA"}}
+
+    ciphertext = base64.b64decode(ciphertext_b64)
+    nonce = base64.b64decode(nonce_b64)
+    tag = base64.b64decode(tag_b64)
+
+    plaintext = decrypt_gcm(_aes_key, nonce, ciphertext, tag)
+    return {
+        "status": "ok",
+        "data": {"plaintext": plaintext.decode("utf-8")},
+    }
 
 # ============================================================
 #  main
