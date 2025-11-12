@@ -5,8 +5,8 @@ from Crypto.Random import get_random_bytes
 
 KDF_ROUNDS = 300
 
-def canonical_json(obj: dict) -> bytes:
-    return json.dumps(obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False).encode('utf-8')
+def canonical_json(obj: dict) -> str:
+    return json.dumps(obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
 
 def hmac_b64(key: bytes, data: bytes) -> str:
     return base64.b64encode(hmac.new(key, data, hashlib.sha256).digest()).decode('ascii')
