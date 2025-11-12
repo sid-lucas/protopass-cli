@@ -1,4 +1,4 @@
-import json, socket, uuid
+import json, socket, uuid, base64
 from pathlib import Path
 
 APP_DIR = Path.home() / ".protopass"
@@ -36,15 +36,17 @@ class AgentClient:
 # ============================================================
 
 def status(self, logger=None):
-    """Retourne l'état courant de l'agent, ou None si erreur."""
+    """
+    Vérifie si l'agent répond au socket.
+    Retourne True si actif, False sinon.
+    """
     try:
         resp = self._send("status")
-        if resp.get("status") == "ok":
-            return resp["data"]
-        if logger: logger.error(f"Agent status error: {resp}")
+        return resp.get("status") == "ok"
     except Exception as e:
-        if logger: logger.warning(f"Cannot reach agent: {e}")
-    return None
+        if logger:
+            logger.warning(f"Agent status check failed: {e}")
+    return False
 
 def start(self, username: str, password: str, salt_b64: str, logger=None):
     """Démarre la session agent (dérive et garde la clé AES)."""
@@ -92,4 +94,16 @@ def decrypt(self, ciphertext_b64: str, nonce_b64: str, tag_b64: str, logger=None
         if logger: logger.error(f"Agent decrypt failed: {resp}")
     except Exception as e:
         if logger: logger.warning(f"Agent decrypt exception: {e}")
+    return None
+
+def hmac(self, payload_bytes: bytes, logger=None):
+    """Calcule HMAC-SHA256(payload) via l'agent, renvoie {'hmac': base64} ou None."""
+    try:
+        payload_b64 = base64.b64encode(payload_bytes).decode()
+        resp = self._send("hmac", {"payload_b64": payload_b64})
+        if resp.get("status") == "ok":
+            return resp["data"]
+        if logger: logger.error(f"Agent hmac failed: {resp}")
+    except Exception as e:
+        if logger: logger.warning(f"Agent hmac exception: {e}")
     return None

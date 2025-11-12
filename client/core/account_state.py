@@ -7,12 +7,8 @@ from ..utils import logger as log
 from client.utils.logger import CTX, notify_user
 from client.utils.network import api_post, handle_resp
 from Crypto.Hash import SHA256
-from client.utils.crypto import (
-    hmac_b64, canonical_json,
-    derive_aes_key,
-    encrypt_gcm, decrypt_gcm,
-    b64_block_from_bytes, bytes_from_b64_block,
-)
+from client.utils.crypto import canonical_json
+from client.utils.agent_client import AgentClient
 
 """
 Structure de account_state.json :
@@ -58,42 +54,44 @@ class AccountState:
     @classmethod
     def _read(cls):
         logger = log.get_logger(CTX.ACCOUNT_STATE, user="")
-        # Vérification de l'existence du fichier
         if not cls.PATH.exists():
-            logger.debug("Local account_state.json is missing.")
+            logger.debug("Local account_state.json is missing")
             return None
 
-        # Lecture du fichier .json
         try:
             data = json.loads(cls.PATH.read_text())
         except Exception:
             cls.clear()
-            logger.error("Unable to decode account_state.json, file inexistant or corrupted.")
+            logger.error("Unable to decode account_state.json, file inexistant or corrupted")
             notify_user("Local session data is invalid. Please log in again.")
             return None
-        
-        # Vérification de l'intégrité du fichier .json
+
+        # Vérification de l'intégrité du fichier via l'agent
         integrity = data.get("integrity")
         if integrity and "value" in integrity:
-            salt_b64 = data.get("salt")
-            mac_key = derive_aes_key(password=getpass.getpass("Enter your password: "), salt=base64.b64decode(salt_b64))
+            agent = AgentClient()
+            if not agent.status():
+                logger.warning("Agent unavailable for integrity check")
+                cls.clear()
+                return data
+
             data_no_integrity = {k: v for k, v in data.items() if k != "integrity"}
-            mac_computed = hmac_b64(mac_key, canonical_json(data_no_integrity))
-            if mac_computed != integrity["value"]:
+            mac_data = canonical_json(data_no_integrity).encode()
+
+            # Comparaison de l'intégrité, si c'est pas bon, clear
+            computed = agent.hmac(mac_data, logger)
+            if not computed or computed.get("hmac") != integrity["value"]:
                 logger.error("Integrity check failed for account_state.json")
                 notify_user("Local account data was tampered with. Session cleared.")
                 cls.clear()
                 return None
 
         return data
-        
+            
 
 
     @classmethod
     def save(cls, username, salt, public_key, private_key_block, session_block, pwd):
-        """
-        Tous les champs sont des chaines b64
-        """
         logger = log.get_logger(CTX.ACCOUNT_STATE, username)
         cls.PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -105,13 +103,19 @@ class AccountState:
             "session": session_block,
         }
 
-        # dérive la même clé que pour la clé maîtresse, pour signer le payload
-        aes_key = derive_aes_key(password=pwd, salt=base64.b64decode(salt))
-        mac = hmac_b64(aes_key, canonical_json(payload))
-        # Ajout du HMAC dans le json
-        payload["integrity"] = {"value": mac, "algo": "HMAC-SHA256"}
+        # Signature via l'agent actif
+        agent = AgentClient()
+        mac_data = canonical_json(payload).encode()
+        mac_resp = agent.hmac(mac_data, logger)
+        mac_value = mac_resp.get("hmac") if mac_resp else None
 
-        # Création du fichier .json sur le disque avec permissions restrictives
+        if not mac_value:
+            logger.error("Failed to compute integrity MAC via agent")
+            return False
+
+        payload["integrity"] = {"value": mac_value, "algo": "HMAC-SHA256"}
+
+        # Création du fichier .json
         try:
             payload_json = json.dumps(payload, indent=2)
             fd = os.open(str(cls.PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -121,7 +125,7 @@ class AccountState:
             logger.error(f"Unable to persist account state: {exc}")
             return False
 
-        # Mise des informations en cache directement
+        # Sauvegarde de certaine valeur en cache
         cls._cached_username = username
         try:
             cls._cached_public_key = base64.b64decode(public_key)
@@ -150,12 +154,12 @@ class AccountState:
         logger = log.get_logger(CTX.SESSION_VERIFY, current_user)
         sid = cls.session_id()
         if not sid:
-            logger.debug("No local session ID available. Session is considered invalid.")
+            logger.debug("No local session ID available. Session is considered invalid")
             return False
 
         session_payload = cls.session_payload()
         if session_payload is None:
-            logger.debug("Unable to build session payload. Session is considered invalid.")
+            logger.debug("Unable to build session payload. Session is considered invalid")
             return False
 
         # Vérifie auprès du serveur
@@ -166,14 +170,14 @@ class AccountState:
             user=current_user
         )
         if data is None:
-            logger.warning(f"Local session '{sid[:8]}' invalid according to server, clearing local data.")
+            logger.warning(f"Local session '{sid[:8]}' invalid according to server, clearing local data")
             cls.clear()
             return False
 
         server_username_hash = data.get("username")
         expected_hash = session_payload.get("username_hash")
         if expected_hash and server_username_hash and expected_hash != server_username_hash:
-            logger.error("Session username mismatch detected; clearing local data.")
+            logger.error("Session username mismatch detected; clearing local data")
             notify_user("Local session data is inconsistent. Please log in again.")
             cls.clear()
             return False
@@ -304,78 +308,82 @@ class AccountState:
     # ============================================================
 
     @classmethod
-    def decrypt_secret(cls, password, enc_block_b64, salt_b64):
-        salt = base64.b64decode(salt_b64)
-        ciphertext, nonce, tag = bytes_from_b64_block(enc_block_b64)
-        key = derive_aes_key(password, salt)
-        return decrypt_gcm(key, ciphertext, nonce, tag)
-    
+    def decrypt_secret(cls, enc_block_b64):
+        """Déchiffre un bloc via l'agent actif."""
+        agent = AgentClient()
+
+        resp = agent.decrypt(
+            enc_block_b64["enc"],
+            enc_block_b64["nonce"],
+            enc_block_b64["tag"]
+        )
+        if not resp or "plaintext" not in resp: return None
+
+        return resp["plaintext"].encode("utf-8")
+        
     @classmethod
-    def encrypt_secret(cls, password, plaintext: bytes, salt_b64: str):
-        salt = base64.b64decode(salt_b64)
-        key = derive_aes_key(password, salt)
-        ciphertext, nonce, tag = encrypt_gcm(key, plaintext)
-        return b64_block_from_bytes(ciphertext, nonce, tag)
+    def encrypt_secret(cls, plaintext: bytes):
+        """Chiffre un bloc via l'agent actif."""
+        agent = AgentClient()
+
+        resp = agent.encrypt(plaintext)
+        if not resp: return None
+
+        return {
+            "enc": resp["ciphertext"],
+            "nonce": resp["nonce"],
+            "tag": resp["tag"],
+        }
     
     @classmethod
     def _load_secret_from_disk(cls, field_name, cache_setter, cache_value_transform, return_transform):
         """
         Mutualise la lecture/déchiffrement d'un secret stocké sur disque.
         """
-        # Lit le fichier du disque
         logger = log.get_logger(CTX.ACCOUNT_STATE, cls.username())
         data = cls._read()
         if not data:
-            logger.error("No local account state found.")
+            logger.error("No local account state found")
             return None
 
-        # Récupère le sel
-        salt_b64 = data.get("salt")
         secret_block = data.get(field_name)
-        if not salt_b64 or not secret_block:
-            logger.error(f"Missing encrypted {field_name} in local account state.")
+        if not secret_block:
+            logger.error(f"Missing encrypted {field_name} in local account state")
             return None
 
-        # Déchiffre le secret avec le mdp avant de le mettre en cache
-        logger.info(f"Reloading {field_name} from disk.")
-        for attempt in range(MAX_UNLOCK_ATTEMPTS):
-            password = getpass.getpass("Enter your password: ")
-            try:
-                decrypted = cls._decrypt_secret(password, secret_block, salt_b64)
-            except Exception:
-                log.get_logger(CTX.DECRYPT, cls.username()).error(f"Unable to decrypt {field_name}.")
-                decrypted = None
-            if decrypted is None:
-                if attempt < MAX_UNLOCK_ATTEMPTS - 1:
-                    notify_user("Incorrect password. Try again.")
-                    continue
-                logger.error(f"Unable to decrypt {field_name} after {MAX_UNLOCK_ATTEMPTS} attempts. Clearing local account data.")
-                notify_user("Too many incorrect password attempts.")
-                cls.clear()
-                return None
+        # Vérifie que l'agent est dispo
+        if not AgentClient().status():
+            logger.error("Agent is not running")
+            notify_user("Secure agent is not running. Please log in again.")
+            return None
 
-            cache_value = cache_value_transform(decrypted)
-            cache_setter(cache_value)
-            cls._warm_related_secrets(password, salt_b64, data, field_name)
-            return return_transform()
-        
-        return None
+        # Déchiffre via l'agent actif
+        plaintext = cls.decrypt_secret(secret_block)
+        if not plaintext:
+            logger.error(f"Decryption failed for {field_name}. Session likely expired")
+            notify_user("Secure agent session expired. Please log in again.")
+            return None
+
+        cache_value = cache_value_transform(plaintext)
+        cache_setter(cache_value)
+        cls._warm_related_secrets(data, field_name)
+        return return_transform()
 
     @classmethod
-    def _warm_related_secrets(cls, password, salt_b64, data, loaded_field):
+    def _warm_related_secrets(cls, data, loaded_field):
         """
         Utilise le même mot de passe pour charger l'autre secret si nécessaire, afin d'éviter une seconde saisie utilisateur.
         """
         def _maybe_load(field_name, loader):
-            block = data.get(field_name)
-            if not block:
+            secret_block = data.get(field_name)
+            if not secret_block:
                 return
             try:
-                plaintext = cls._decrypt_secret(password, block, salt_b64)
+                plaintext = cls.decrypt_secret(secret_block)
                 loader(plaintext)
             except Exception:
                 log.get_logger(CTX.DECRYPT, cls.username()).warning(
-                    f"Unable to preload {field_name} from disk."
+                    f"Unable to preload {field_name} from disk"
                 )
 
         if loaded_field != "private_key" and cls._private_key is None:

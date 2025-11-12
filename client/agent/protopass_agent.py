@@ -1,4 +1,4 @@
-import os, json, socket, signal, sys, time, errno, threading, base64
+import os, json, socket, signal, sys, time, errno, threading, base64, hmac, hashlib
 from pathlib import Path
 from client.utils.crypto import (
     derive_aes_key,
@@ -69,6 +69,7 @@ def _handle(line: str):
             "shutdown": _op_shutdown,
             "encrypt": _op_encrypt,
             "decrypt": _op_decrypt,
+            "hmac": _op_hmac,   
         }
         
         if op not in ops:
@@ -258,6 +259,36 @@ def _op_decrypt(req):
         "data": {"plaintext": plaintext.decode("utf-8")},
     }
 
+def _op_hmac(req):
+    """
+    Calcule un HMAC-SHA256(payload) avec la clé _aes_key en mémoire.
+    Entrée: data.payload_b64 (bytes encodés en base64)
+    Sortie: data.hmac (base64 du digest)
+    """
+    # Vérifie qu'on a une clé en mémoire
+    global _aes_key
+    if not _aes_key:
+        return {"status": "error", "data": {"code": "ERR_LOCKED"}}
+
+    data = req.get("data", {})
+    payload_b64 = data.get("payload_b64")
+    if not payload_b64:
+        return {"status": "error", "data": {"code": "ERR_MISSING_DATA"}}
+
+    # Décodage du payload
+    try:
+        payload = base64.b64decode(payload_b64)
+    except Exception as e:
+        return {"status": "error", "data": {"code": "ERR_BAD_BASE64", "message": str(e)}}
+
+    # Calcule HMAC-SHA256
+    mac = hmac.new(bytes(_aes_key), payload, digestmod=hashlib.sha256).digest()
+    mac_b64 = base64.b64encode(mac).decode()
+
+    # Reset le TTL
+    _schedule_auto_shutdown(_state["ttl"])
+
+    return {"status": "ok", "data": {"hmac": mac_b64, "algo": "HMAC-SHA256"}}
 # ============================================================
 #  main
 # ============================================================
