@@ -171,6 +171,7 @@ class AccountState:
         )
         if data is None:
             logger.warning(f"Local session '{sid[:8]}' invalid according to server, clearing local data")
+            notify_user("Session invalid or expired. Please log in again.")
             cls.clear()
             return False
 

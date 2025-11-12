@@ -25,7 +25,7 @@ def register_account(args):
     """
     Création d'un nouveau compte utilisateur.
     """
-    
+    agent = AgentClient()
     logger = log.get_logger(CTX.REGISTER)
 
     # vérifie qu'on est pas déjà connecté
@@ -69,7 +69,6 @@ def register_account(args):
     vkey_b64 = base64.b64encode(vkey).decode()
 
     # Démarre l'agent, il dérive la aes_key
-    agent = AgentClient()
     if not agent.start(username, password, salt_b64, logger):
         logger.error("Failed to initialize secure agent during registration")
         notify_user("Unable to start the secure agent. Please try again.")
@@ -120,6 +119,7 @@ def login_account(args):
     """
     Authentification d'un utilisateur existant via SRP.
     """
+    agent = AgentClient()
     logger = log.get_logger(CTX.LOGIN)
 
     # Vérifie si une session locale est déjà active
@@ -236,7 +236,6 @@ def login_account(args):
         }
 
         # Démarre l'agent, il dérive la aes_key
-        agent = AgentClient()
         if not agent.start(username, password, salt_b64, logger):
             if attempt < MAX_PASSWORD_ATTEMPTS - 1:
                 notify_user("Incorrect username or password. Try again.")
@@ -251,7 +250,6 @@ def login_account(args):
         )
 
         if not data:
-            agent.shutdown(logger)
             if attempt < MAX_PASSWORD_ATTEMPTS - 1:
                 notify_user("Incorrect username or password. Try again.")
             continue
@@ -263,7 +261,7 @@ def login_account(args):
 
     if not login_success:
         notify_user("Too many incorrect password attempts.")
-        agent.shutdown(logger)
+        if agent: agent.shutdown(logger)
         return
 
     # Stockage de l'état du compte pour les prochaines commandes
@@ -291,7 +289,7 @@ def logout_account(args):
     """
     Déconnexion de l'utilisateur (révocation de la session côté client et serveur).
     """
-
+    agent = AgentClient()
     session_payload = AccountState.session_payload()
     username = AccountState.username()
     logger = log.get_logger(CTX.LOGOUT, username)
@@ -312,7 +310,6 @@ def logout_account(args):
 
     # Nettoyage de la session locale et shutdown de l'agent
     AccountState.clear()
-    agent = AgentClient()
     agent.shutdown(logger)
 
     logger.info(f"User '{username}' logged out")

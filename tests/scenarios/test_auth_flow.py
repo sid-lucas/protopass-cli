@@ -1,14 +1,12 @@
-import pytest
-import json
-import time
-
+import pytest, json, time
 from client.core import auth
 from client.core.account_state import AccountState
 import server.session_store as session_store
 import server.user_store as user_store
 from server import app as flask_app
 from tests.helpers import build_fake_api_post
-
+from client.utils.crypto import canonical_json
+from client.utils.agent_client import AgentClient
 
 """
 SCENARIOS : Authentification côté client/serveur
@@ -61,7 +59,6 @@ def client_state(tmp_path, monkeypatch):
     yield
     if fake_path.exists():
         fake_path.unlink()
-
 
 # ============================================================
 #  Tests principaux
@@ -400,8 +397,22 @@ def test_session_invalid_local_id(monkeypatch, tmp_path, server_app):
     # Étape 2 : Corrompt le session_id local
     # ----------------------------------------
     data = json.loads(AccountState.PATH.read_text())
-    salt_b64 = data["salt"]
-    data["session"] = AccountState.encrypt_secret("strongpass", b"FAKE_INVALID_SESSION", salt_b64)
+    data["session"] = AccountState.encrypt_secret(b"FAKE_INVALID_SESSION")
+
+    # Recalcule l'intégrité pour qu'elle reste cohérente avec les nouvelles données,
+    # tout en conservant un session_id invalide côté serveur.
+
+    mac_payload = {
+        "username": data["username"],
+        "public_key": data["public_key"],
+        "salt": data["salt"],
+        "private_key": data["private_key"],
+        "session": data["session"],
+    }
+    agent = AgentClient()
+    mac_resp = agent.hmac(canonical_json(mac_payload).encode())
+    data["integrity"] = {"value": mac_resp["hmac"], "algo": "HMAC-SHA256"}
+
     AccountState.PATH.write_text(json.dumps(data))
     # Simule un redémarrage : on vide les caches en mémoire
     AccountState._cached_username = None
