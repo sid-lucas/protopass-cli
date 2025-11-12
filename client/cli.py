@@ -115,12 +115,24 @@ def start_shell(_args=None):
 
     print("ProtoPass CLI Shell. Type 'exit', 'quit' or 'q' to quit.")
 
-    
+    session_verified = None  # Evite de revalider la session à chaque appui sur Entrée
+    prompt_user = None  # Username affiché seulement si la session a été confirmée
+
+    def refresh_prompt_user(force=False):
+        nonlocal session_verified, prompt_user
+        if not force and session_verified is not None:
+            return
+        if not auth.AccountState.PATH.exists():
+            session_verified = False
+            prompt_user = None
+            return
+        session_verified = auth.AccountState.valid()
+        prompt_user = auth.AccountState.username() if session_verified else None
+
     while True:
         try:
-            prompt = f"protopass> "
-            if auth.AccountState.valid():
-                prompt = f"{auth.AccountState.username()}@protopass> "
+            refresh_prompt_user()
+            prompt = f"{prompt_user}@protopass> " if prompt_user else "protopass> "
             raw_line = input(f"\n{prompt}").strip()
             
             if not raw_line:
@@ -144,6 +156,7 @@ def start_shell(_args=None):
                 continue
 
             dispatch_command(args)
+            session_verified = None  # force refreshing prompt next iteration
 
         except KeyboardInterrupt:
             print("\nUse 'q' to quit.")
