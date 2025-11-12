@@ -6,6 +6,7 @@ from Crypto.Hash import SHA256
 from .account_state import AccountState
 from ..utils import logger as log
 from client.utils.network import api_post, handle_resp
+from client.utils.agent_client import AgentClient
 from client.utils.logger import notify_user
 from client.utils.logger import CTX
 from client.utils.crypto import (
@@ -29,7 +30,7 @@ def register_account(args):
 
     # vérifie qu'on est pas déjà connecté
     if AccountState.valid():
-        logger.warning("User is already logged in.")
+        logger.warning("User is already logged in")
         notify_user("You are already logged in.")
         return
 
@@ -51,7 +52,7 @@ def register_account(args):
         if password == password_confirm:
             break
 
-        logger.error("Password confirmation mismatch during registration.")
+        logger.error("Password confirmation mismatch during registration")
         if attempt < MAX_PASSWORD_ATTEMPTS - 1:
             notify_user("Passwords do not match. Try again.\n")
     else:
@@ -107,12 +108,11 @@ def login_account(args):
     """
     Authentification d'un utilisateur existant via SRP.
     """
-
     logger = log.get_logger(CTX.LOGIN)
 
     # Vérifie si une session locale est déjà active
     if AccountState.valid():
-        logger.warning("User is already logged in.")
+        logger.warning("User is already logged in")
         notify_user("You are already logged in.")
         return
 
@@ -194,7 +194,7 @@ def login_account(args):
         session_id = data.get("session_id")
         usr.verify_session(HAMK)
         if not usr.authenticated() or not session_id:
-            logger.error("Incorrect username or password (SRP verification failed).")
+            logger.error("Incorrect username or password (SRP verification failed)")
             if attempt < MAX_PASSWORD_ATTEMPTS - 1:
                 notify_user("Incorrect username or password. Try again.")
             continue
@@ -222,7 +222,7 @@ def login_account(args):
         tag_b64 = user_key.get("tag")
 
         if not all([public_key_b64, private_key_enc_b64, nonce_b64, tag_b64]):
-            logger.error("Incomplete user key data from server.")
+            logger.error("Incomplete user key data from server")
             notify_user("Incomplete user key data received from server.")
             return
 
@@ -254,14 +254,25 @@ def login_account(args):
     try:
         session_block = AccountState.encrypt_secret(password, session_id.encode(), salt_b64)
     except Exception:
-        logger.error("Failed to encrypt session for local storage.")
+        logger.error("Failed to encrypt session for local storage")
         notify_user("Unable to protect local session data.")
         return
 
     if AccountState.save(username, salt_b64, public_key_b64, private_block, session_block, password) is False:
-        logger.error("Failed to save account state locally.")
-        notify_user("Failed to save account state locally.")
+        logger.error("Failed to save account state locally")
+        notify_user("An error occured. Please try again.")
         return
+    
+    # Démarrage de l'agent local sécurisé 
+    try:
+        agent = AgentClient()
+        resp = agent.start(username, password, salt_b64)
+        if resp.get("status") == "ok":
+            logger.debug("Local agent started (aes_key in memory)")
+        else:
+            logger.error(f"An error occured with local agent: {resp}")
+    except Exception as e:
+        logger.warning(f"Cannot start the local agent: {e}")
 
     logger.info(f"User '{username}' successfully logged")
     notify_user(f"Login successful. Welcome {username}!")
@@ -286,10 +297,22 @@ def logout_account(args):
         user=username
     )
     if data is None: 
-        logger.error("Failed to revoke session on server.")
+        logger.error("Failed to revoke session on server")
         return
 
     # Nettoyage de la session locale
     AccountState.clear()
+
+    # Extinction propre de l'agent local
+    try:
+        agent = AgentClient()
+        resp = agent.shutdown()
+        if resp.get("status") == "ok":
+            logger.debug("Local agent stopped properly")
+        else:
+            logger.error(f"An error occured with local agent: {resp}")
+    except Exception:
+        logger.warning("No active agent found")
+
     logger.info(f"User '{username}' logged out")
     notify_user("Logout successful. Session terminated.")
