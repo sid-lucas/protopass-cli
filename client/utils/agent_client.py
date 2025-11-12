@@ -1,4 +1,4 @@
-import os, json, socket, uuid
+import json, socket, uuid
 from pathlib import Path
 
 APP_DIR = Path.home() / ".protopass"
@@ -30,8 +30,30 @@ class AgentClient:
             resp = json.loads(resp_raw.decode("utf-8"))
             return resp
 
-    # --- API publique ---
-    def status(self): return self._send("status")
-    def unlock(self, username: str): return self._send("unlock", {"username": username})
-    def lock(self): return self._send("lock")
-    def shutdown(self): return self._send("shutdown")
+
+# ============================================================
+#  API publique (utilisées par le CLI)
+# ============================================================
+
+def status(self):
+    """Retourne l'état courant de l'agent."""
+    return self._send("status")
+
+def start(self, username: str, password: str, salt_b64: str):
+    """Démarre la session agent (dérive et garde la clé AES)."""
+    return self._send("start", {"username": username, "password": password, "salt": salt_b64})
+
+def shutdown(self):
+    """Arrête l'agent (auto-effacement et fermeture)."""
+    return self._send("shutdown")
+
+def encrypt(self, plaintext: str | bytes):
+    """Chiffre une donnée avec la clé AES stockée dans l'agent."""
+    if isinstance(plaintext, bytes):
+        plaintext = plaintext.decode("utf-8", "ignore")
+    return self._send("encrypt", {"plaintext": plaintext})
+
+def decrypt(self, ciphertext_b64: str, nonce_b64: str, tag_b64: str):
+    """Déchiffre une donnée AES-GCM via la clé de l'agent."""
+    return self._send("decrypt", {"ciphertext": ciphertext_b64, "nonce": nonce_b64, "tag": tag_b64})
+
