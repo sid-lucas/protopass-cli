@@ -43,8 +43,20 @@ def register_account(args):
 
     logger.info(f"Starting registration for username '{username}'")
 
-    # Demande du mot de passe
-    password = getpass.getpass("Enter your password: ")
+    # Demande et confirmation du mot de passe (3 essais max)
+    password = None
+    for attempt in range(MAX_PASSWORD_ATTEMPTS):
+        password = getpass.getpass("Enter desired password: ")
+        password_confirm = getpass.getpass("Confirm your password: ")
+        if password == password_confirm:
+            break
+
+        logger.error("Password confirmation mismatch during registration.")
+        if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+            notify_user("Passwords do not match. Try again.\n")
+    else:
+        notify_user("Passwords do not match. Registration cancelled.")
+        return
 
     # Générer (salt + verifier) selon SRP
     salt, vkey = srp.create_salted_verification_key(
