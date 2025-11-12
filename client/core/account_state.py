@@ -35,6 +35,9 @@ Structure de account_state.json :
 }
 """
 
+MAX_UNLOCK_ATTEMPTS = 3
+
+
 class AccountState:
     """
     Stocke l'état local du compte : informations persistantes associées à l'utilisateur
@@ -310,7 +313,7 @@ class AccountState:
 
         # Déchiffre le secret avec le mdp avant de le mettre en cache
         logger.info(f"Reloading {field_name} from disk.")
-        while True:
+        for attempt in range(MAX_UNLOCK_ATTEMPTS):
             password = getpass.getpass("Enter your password: ")
             try:
                 decrypted = cls._decrypt_secret(password, secret_block, salt_b64)
@@ -318,13 +321,20 @@ class AccountState:
                 log.get_logger(CTX.DECRYPT, cls.username()).error(f"Unable to decrypt {field_name}.")
                 decrypted = None
             if decrypted is None:
-                notify_user("Incorrect password. Try again.")
-                continue
+                if attempt < MAX_UNLOCK_ATTEMPTS - 1:
+                    notify_user("Incorrect password. Try again.")
+                    continue
+                logger.error(f"Unable to decrypt {field_name} after {MAX_UNLOCK_ATTEMPTS} attempts. Clearing local account data.")
+                notify_user("Too many incorrect password attempts.")
+                cls.clear()
+                return None
 
             cache_value = cache_value_transform(decrypted)
             cache_setter(cache_value)
             cls._warm_related_secrets(password, salt_b64, data, field_name)
             return return_transform()
+        
+        return None
 
     @classmethod
     def _warm_related_secrets(cls, password, salt_b64, data, loaded_field):

@@ -244,7 +244,7 @@ def login_account(args):
         break
 
     if not login_success:
-        notify_user("Incorrect username or password.")
+        notify_user("Too many incorrect password attempts.")
         return
 
     # Stockage de l'état du compte pour les prochaines commandes
