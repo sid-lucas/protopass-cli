@@ -52,8 +52,6 @@ class AgentClient:
                 stderr=subprocess.DEVNULL,
                 cwd=Path(__file__).resolve().parents[2],  # run from repository root
             )
-            if logger:
-                logger.debug("Agent daemon spawned via subprocess")
         except Exception as exc:
             raise RuntimeError(f"Unable to spawn agent daemon: {exc}") from exc
 
@@ -122,7 +120,7 @@ class AgentClient:
         try:
             resp = self._send("start", {"username": username, "password": password, "salt": salt_b64}, logger=logger)
             if resp.get("status") == "ok":
-                if logger: logger.debug("Agent started (master_key en mémoire)")
+                if logger: logger.debug("Agent started (master_key in memory)")
                 return True
             if logger: logger.error(f"Agent start failed: {resp}")
         except Exception as e:

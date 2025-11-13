@@ -211,7 +211,7 @@ def _op_encrypt(req):
         plaintext = plaintext.encode("utf-8")
 
     # Chiffre
-    nonce, ciphertext, tag = encrypt_gcm(_master_key, plaintext)
+    ciphertext, nonce, tag = encrypt_gcm(_master_key, plaintext)
 
     # Reset le TTL
     _schedule_auto_shutdown(_state["ttl"])
@@ -247,8 +247,8 @@ def _op_decrypt(req):
     nonce = base64.b64decode(nonce_b64)
     tag = base64.b64decode(tag_b64)
 
-    # Déchiffre
-    plaintext = decrypt_gcm(_master_key, nonce, ciphertext, tag)
+    # Déchiffre (en tenant compte des anciens blocs où enc/nonce étaient inversés)
+    plaintext = decrypt_gcm(_master_key, ciphertext, nonce, tag)
 
     # Reset le TTL
     _schedule_auto_shutdown(_state["ttl"])

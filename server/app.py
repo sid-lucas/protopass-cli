@@ -222,7 +222,7 @@ def create_vault(username):
         return make_resp("error", "Vault Create", str(e), 409)
 
     # stocke simplement les données reçues concernant le nouveau vault
-    return make_resp("ok", "Vault create", f"Vault {vault_id[:8]}... created successfully", 201,
+    return make_resp("ok", "Vault create", f"Vault '{vault_id[:8]}...' created successfully", 201,
         data={"vault_id": vault_id}
     )
 

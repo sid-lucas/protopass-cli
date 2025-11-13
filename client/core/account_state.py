@@ -81,7 +81,7 @@ class AccountState:
             computed = agent.hmac(mac_data, logger)
             if not computed or computed.get("hmac") != integrity["value"]:
                 logger.error("Integrity check failed for account_state.json")
-                notify_user("Local account data was tampered with. Session cleared.")
+                notify_user("Local account data is corrumpted. You have been logged out.")
                 cls.clear()
                 return None
 

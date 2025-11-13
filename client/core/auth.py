@@ -122,7 +122,6 @@ def login_account(args):
     agent = AgentClient()
     username = args.username
     logger = log.get_logger(CTX.LOGIN, username)
-    keep_agent_alive = False
 
     # Vérifie si une session locale est déjà active
     if AccountState.valid():
@@ -134,7 +133,9 @@ def login_account(args):
 
     username_hash = SHA256.new(username.encode()).hexdigest()
     
+    keep_agent_alive = False
     login_success = False
+    
     password = None
     session_id = None
     salt_b64 = None
@@ -274,7 +275,7 @@ def login_account(args):
         logger.info(f"User '{username}' successfully logged")
         notify_user(f"Login successful. Welcome {username}!")
         keep_agent_alive = True
-        
+
     finally:
         if not keep_agent_alive:
             agent.shutdown(logger)

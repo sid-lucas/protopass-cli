@@ -224,5 +224,4 @@ def create_vault(_args):
         notify_user("Vault creation failed. See logs for details.")
         return
 
-    logger.info("Vault '%s' created (id=%s)", vault_name, vault_id[:8])
     notify_user(f"Vault '{vault_name}' created successfully.")
