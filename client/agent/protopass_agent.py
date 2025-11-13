@@ -4,6 +4,7 @@ from client.utils.crypto import (
     derive_master_key,
     encrypt_gcm, decrypt_gcm,
 )
+from client.utils import logger as log
 
 """
 Protopass Agent — Processus local sécurisé
@@ -13,10 +14,12 @@ Garde en mémoire la master_key et exécute les opérations sensibles pour le cl
 # Globales
 APP_DIR = Path.home() / ".protopass"
 SOCK_PATH = APP_DIR / "agent.sock"
-TTL = 300 # 5 minutes d'inactivité = auto-destruction
+TTL = 5 # 5 minutes d'inactivité = auto-destruction
 
 _master_key = None
 _ttl_timer = None
+_server_socket = None
+_logger = log.get_logger("Agent")
 
 # État interne de l'agent
 _running = True
@@ -42,6 +45,8 @@ def _prepare_socket():
     os.chmod(APP_DIR, 0o700)
     _cleanup()
 
+    global _server_socket
+
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.bind(str(SOCK_PATH))
     os.chmod(SOCK_PATH, 0o600)
@@ -51,6 +56,8 @@ def _prepare_socket():
     if (st.st_mode & 0o777) != 0o600 or st.st_uid != os.getuid():
         raise PermissionError("agent.sock must be 0600 and owned by current user")
     s.listen(5)
+    s.settimeout(1.0)  # Permet de vérifier régulièrement si l'agent doit s'arrêter
+    _server_socket = s
     return s
 
 def _handle(line: str):
@@ -94,6 +101,8 @@ def _serve(sock):
     while _running:
         try:
             conn, _ = sock.accept()
+        except socket.timeout:
+            continue
         except OSError as e:
             if e.errno in (errno.EINTR, errno.EAGAIN): continue
             break
@@ -117,7 +126,6 @@ def _wipe_sensitive_data():
     _master_key = None
 
     _state["locked"] = True
-    print("[agent] données sensibles effacées.")
 
 def _schedule_auto_shutdown(ttl):
     """Planifie un arrêt automatique après TTL secondes."""
@@ -127,7 +135,7 @@ def _schedule_auto_shutdown(ttl):
         _ttl_timer = None
 
     def _expire():
-        print(f"[agent] inactif depuis {ttl}s - arrêt automatique.")
+        _logger.debug(f"Agent TTL expired after {ttl}s - shutdown triggered")
         _op_shutdown()
 
     _ttl_timer = threading.Timer(ttl, _expire)
@@ -174,8 +182,6 @@ def _op_start(req):
         "ttl": TTL, # TTL 5 min par défaut
     })
 
-    print(f"[agent] session active pour {user}")
-
     # Planifie un auto-shutdown quand le TTL expire
     _schedule_auto_shutdown(_state["ttl"])
 
@@ -187,11 +193,23 @@ def _op_shutdown(req=None):
     - Efface les données sensibles
     - Ferme le socket et quitte le process
     """
-    global _running
+    global _running, _ttl_timer, _server_socket
     _running = False
+
+    if _ttl_timer:
+        _ttl_timer.cancel()
+        _ttl_timer = None
+
+    if _server_socket:
+        try:
+            _server_socket.close()
+        except OSError:
+            pass
+        finally:
+            _server_socket = None
+
     _wipe_sensitive_data()
 
-    print("[agent] shutdown demandé.")
     return {"status": "ok", "data": {"message": "agent shutting down"}}
 
 def _op_encrypt(req):
@@ -304,14 +322,15 @@ def main():
     signal.signal(signal.SIGINT, _sig)
     signal.signal(signal.SIGTERM, _sig)
 
-    print(f"[agent] en écoute sur {SOCK_PATH}")
+    global _server_socket
     sock = _prepare_socket()
 
     try:
         _serve(sock)
     finally:
-        print("[agent] arrêt en cours...")
         sock.close()
+        if _server_socket is sock:
+            _server_socket = None
         _cleanup()
         
 
