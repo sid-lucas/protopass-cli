@@ -131,6 +131,11 @@ class AgentClient:
 
     def shutdown(self, logger=None):
         """Arrête l'agent (auto-effacement et fermeture)."""
+        if not self.sock_path.exists():
+            if logger:
+                logger.debug("No existing agent to shut down")
+            return True
+        
         try:
             resp = self._send("shutdown", logger=logger)
             if resp.get("status") == "ok":
