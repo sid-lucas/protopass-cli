@@ -68,26 +68,31 @@ def register_account(args):
     salt_b64 = base64.b64encode(salt).decode()
     vkey_b64 = base64.b64encode(vkey).decode()
 
-    # Démarre l'agent, il dérive la master_key
-    if not agent.start(username, password, salt_b64, logger):
-        logger.error("Failed to initialize secure agent during registration")
-        notify_user("Unable to start the secure agent. Please try again.")
-        return
+    try:
+        # Démarre l'agent, il dérive la master_key
+        if not agent.start(username, password, salt_b64, logger):
+            logger.error("Failed to initialize secure agent during registration")
+            notify_user("Unable to start the secure agent. Please try again.")
+            return
 
-    # Génération de la paire de clé RSA (2048 bits) appelée 'userkey"
-    public_user_key, private_user_key = generate_userkey_pair()
-    
-    # Chiffrement de la clé privée user key avec l'agent (qui contient la master_key)    
-    private_key_b64 = base64.b64encode(private_user_key).decode()
-    enc_data = agent.encrypt(private_key_b64, logger)
-    private_key_block = {
-        "enc": enc_data["ciphertext"],
-        "nonce": enc_data["nonce"],
-        "tag": enc_data["tag"],
-    }
+        # Génération de la paire de clé RSA (2048 bits) appelée 'userkey"
+        public_user_key, private_user_key = generate_userkey_pair()
+        
+        # Chiffrement de la clé privée user key avec l'agent (qui contient la master_key)    
+        private_key_b64 = base64.b64encode(private_user_key).decode()
+        enc_data = agent.encrypt(private_key_b64, logger)
+        if not enc_data:
+            logger.error("Agent failed to encrypt private key during registration")
+            notify_user("Secure agent unavailable. Please try again.")
+            return
 
-    # Arrêt immédiat de l’agent après register
-    agent.shutdown(logger)
+        private_key_block = {
+            "enc": enc_data["ciphertext"],
+            "nonce": enc_data["nonce"],
+            "tag": enc_data["tag"],
+        }
+    finally:
+        agent.shutdown(logger)
 
     # Envoie données du nouvel utilisateur au serveur
     payload = {
@@ -115,7 +120,9 @@ def login_account(args):
     Authentification d'un utilisateur existant via SRP.
     """
     agent = AgentClient()
-    logger = log.get_logger(CTX.LOGIN)
+    username = args.username
+    logger = log.get_logger(CTX.LOGIN, username)
+    keep_agent_alive = False
 
     # Vérifie si une session locale est déjà active
     if AccountState.valid():
@@ -123,8 +130,6 @@ def login_account(args):
         notify_user("You are already logged in.")
         return
 
-    username = args.username
-    logger = log.get_logger(CTX.LOGIN, username)
     logger.info(f"Tried to login as '{username}'")
 
     username_hash = SHA256.new(username.encode()).hexdigest()
@@ -137,148 +142,142 @@ def login_account(args):
     private_block = None
     private_user_key = None
 
-    # Autorise plusieurs tentatives de saisie avant d'abandonner
-    for attempt in range(MAX_PASSWORD_ATTEMPTS):
-        password = getpass.getpass(f"Enter the password of '{username}': ")
+    try:
+        # Autorise plusieurs tentatives de saisie avant d'abandonner
+        for attempt in range(MAX_PASSWORD_ATTEMPTS):
+            password = getpass.getpass(f"Enter the password of '{username}': ")
 
-        # Création de l'objet SRP côté client
-        usr = srp.User(
-            username_hash.encode(),
-            password.encode(),
-            hash_alg=srp.SHA256,
-            ng_type=srp.NG_2048
-        )
+            # Création de l'objet SRP côté client
+            usr = srp.User(
+                username_hash.encode(),
+                password.encode(),
+                hash_alg=srp.SHA256,
+                ng_type=srp.NG_2048
+            )
 
-        # client calcul sa clé publique (A)
-        # la première valeur de retour est inutilisée
-        # '_' est utilisé par convention pour indiquer cela
-        _, A = usr.start_authentication()
+            _, A = usr.start_authentication()
 
-        # Envoi au serveur le username et la clé publique (A)
-        payload = {
-            "username": username_hash,
-            "A": base64.b64encode(A).decode()
-        }
-        data = handle_resp(
-            api_post("/srp/start", payload, user=username),
-            required_fields=["salt", "B"],
-            context=CTX.SRP_START,
-            user=username
-        )
-        if data is None:
-            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
-                notify_user("Incorrect username or password. Try again.")
-            continue
-
-        # Réception du sel et clé publique (B) du serveur
-        salt_b64 = data["salt"]
-        salt = base64.b64decode(salt_b64)
-        B = base64.b64decode(data["B"])
-
-        # Validation du challenge
-        M = usr.process_challenge(salt, B)
-
-        # Envoi au serveur du challenge complété (M)
-        payload = {
-            "username": username_hash,
-            "M": base64.b64encode(M).decode()
-        }
-        data = handle_resp(
-            api_post("/srp/verify", payload, user=username),
-            required_fields=["HAMK", "session_id"],
-            context=CTX.SRP_VERIFY,
-            user=username
-        )
-        if data is None:
-            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
-                notify_user("Incorrect username or password. Try again.")
-            continue
-
-        # Réception de la preuve d'authentification finale (HAMK)
-        HAMK = base64.b64decode(data["HAMK"])
-
-        # Validation finale de la session SRP
-        session_id = data.get("session_id")
-        usr.verify_session(HAMK)
-        if not usr.authenticated() or not session_id:
-            logger.error("Incorrect username or password (SRP verification failed)")
-            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
-                notify_user("Incorrect username or password. Try again.")
-            continue
-
-        # Demande au serveur la user key et réceptionne les données
-        data = handle_resp(
-            api_post(
-                "/userkey",
-                {"session_id": session_id, "username_hash": username_hash},
+            payload = {
+                "username": username_hash,
+                "A": base64.b64encode(A).decode()
+            }
+            data = handle_resp(
+                api_post("/srp/start", payload, user=username),
+                required_fields=["salt", "B"],
+                context=CTX.SRP_START,
                 user=username
-            ),
-            required_fields=["user_key"],
-            context=CTX.FETCH_USER_KEY,
-            user=username
-        )
-        if data is None:
-            notify_user("Failed to retrieve user key from server.")
+            )
+            if data is None:
+                if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                    notify_user("Incorrect username or password. Try again.")
+                continue
+
+            salt_b64 = data["salt"]
+            salt = base64.b64decode(salt_b64)
+            B = base64.b64decode(data["B"])
+
+            M = usr.process_challenge(salt, B)
+
+            payload = {
+                "username": username_hash,
+                "M": base64.b64encode(M).decode()
+            }
+            data = handle_resp(
+                api_post("/srp/verify", payload, user=username),
+                required_fields=["HAMK", "session_id"],
+                context=CTX.SRP_VERIFY,
+                user=username
+            )
+            if data is None:
+                if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                    notify_user("Incorrect username or password. Try again.")
+                continue
+
+            HAMK = base64.b64decode(data["HAMK"])
+
+            session_id = data.get("session_id")
+            usr.verify_session(HAMK)
+            if not usr.authenticated() or not session_id:
+                logger.error("Incorrect username or password (SRP verification failed)")
+                if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                    notify_user("Incorrect username or password. Try again.")
+                continue
+
+            data = handle_resp(
+                api_post(
+                    "/userkey",
+                    {"session_id": session_id, "username_hash": username_hash},
+                    user=username
+                ),
+                required_fields=["user_key"],
+                context=CTX.FETCH_USER_KEY,
+                user=username
+            )
+            if data is None:
+                notify_user("Failed to retrieve user key from server.")
+                return
+
+            user_key = data.get("user_key", {})
+            public_key_b64 = user_key.get("public_key")
+            private_block = {
+                "enc": user_key.get("private_key_enc"),
+                "nonce": user_key.get("nonce"),
+                "tag": user_key.get("tag"),
+            }
+
+            if not agent.start(username, password, salt_b64, logger):
+                if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                    notify_user("Incorrect username or password. Try again.")
+                continue
+
+            data = agent.decrypt(
+                private_block["enc"],
+                private_block["nonce"],
+                private_block["tag"],
+                logger
+            )
+            if not data:
+                if attempt < MAX_PASSWORD_ATTEMPTS - 1:
+                    notify_user("Incorrect username or password. Try again.")
+                continue
+            
+            private_user_key = base64.b64decode(data.get("plaintext"))
+
+            login_success = True
+            break
+
+        if not login_success:
+            notify_user("Too many incorrect password attempts.")
             return
 
-        # Réception des données de la clé privée chiffrée
-        user_key = data.get("user_key", {})
-        public_key_b64 = user_key.get("public_key")
-        private_block = {
-            "enc": user_key.get("private_key_enc"),
-            "nonce": user_key.get("nonce"),
-            "tag": user_key.get("tag"),
+        AccountState.set_private_key(private_user_key)
+        AccountState.set_session_id(session_id)
+
+        session_id_b64 = base64.b64encode(session_id.encode()).decode()
+        enc_data = agent.encrypt(session_id_b64, logger)
+        if not enc_data:
+            logger.error("Agent failed to encrypt session block during login")
+            notify_user("Secure agent unavailable. Please try again.")
+            return
+
+        session_block = {
+            "enc": enc_data["ciphertext"],
+            "nonce": enc_data["nonce"],
+            "tag": enc_data["tag"],
         }
 
-        # Démarre l'agent, il dérive la master_key
-        if not agent.start(username, password, salt_b64, logger):
-            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
-                notify_user("Incorrect username or password. Try again.")
-            continue
+        if AccountState.save(username, salt_b64, public_key_b64, private_block, session_block, password) is False:
+            logger.error("Failed to save account state locally")
+            notify_user("An error occured. Please try again.")
+            return
 
-        # Déchiffrement via l’agent
-        data = agent.decrypt(
-            private_block["enc"],
-            private_block["nonce"],
-            private_block["tag"],
-            logger
-        )
-        if not data:
-            if attempt < MAX_PASSWORD_ATTEMPTS - 1:
-                notify_user("Incorrect username or password. Try again.")
-            continue
+        logger.info(f"User '{username}' successfully logged")
+        notify_user(f"Login successful. Welcome {username}!")
+        keep_agent_alive = True
         
-        private_user_key = base64.b64decode(data.get("plaintext"))
-
-        login_success = True
-        break
-
-    if not login_success:
-        notify_user("Too many incorrect password attempts.")
-        if agent: agent.shutdown(logger)
-        return
-
-    # Stockage de l'état du compte pour les prochaines commandes
-    AccountState.set_private_key(private_user_key) # clé privée en mémoire volatile
-    AccountState.set_session_id(session_id) # idem
-
-    # Chiffrement du bloc de session via agent
-    session_id_b64 = base64.b64encode(session_id.encode()).decode()
-    enc_data = agent.encrypt(session_id_b64, logger)
-    session_block = {
-        "enc": enc_data["ciphertext"],
-        "nonce": enc_data["nonce"],
-        "tag": enc_data["tag"],
-    }
-
-    if AccountState.save(username, salt_b64, public_key_b64, private_block, session_block, password) is False:
-        logger.error("Failed to save account state locally")
-        notify_user("An error occured. Please try again.")
-        agent.shutdown(logger)
-        return
-
-    logger.info(f"User '{username}' successfully logged")
-    notify_user(f"Login successful. Welcome {username}!")
+    finally:
+        if not keep_agent_alive:
+            agent.shutdown(logger)
 
 def logout_account(args):
     """
