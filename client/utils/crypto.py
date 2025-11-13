@@ -11,7 +11,7 @@ def canonical_json(obj: dict) -> str:
 def hmac_b64(key: bytes, data: bytes) -> str:
     return base64.b64encode(hmac.new(key, data, hashlib.sha256).digest()).decode('ascii')
 
-def derive_aes_key(password: str, salt: bytes, rounds: int = KDF_ROUNDS) -> bytes:
+def derive_master_key(password: str, salt: bytes, rounds: int = KDF_ROUNDS) -> bytes:
     return bcrypt.kdf(
         password=password.encode(),
         salt=salt,

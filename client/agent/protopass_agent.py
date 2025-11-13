@@ -1,7 +1,7 @@
 import os, json, socket, signal, sys, time, errno, threading, base64, hmac, hashlib
 from pathlib import Path
 from client.utils.crypto import (
-    derive_aes_key,
+    derive_master_key,
     encrypt_gcm, decrypt_gcm,
 )
 
@@ -15,7 +15,7 @@ APP_DIR = Path.home() / ".protopass"
 SOCK_PATH = APP_DIR / "agent.sock"
 TTL = 300 # 5 minutes d'inactivité = auto-destruction
 
-_aes_key = None
+_master_key = None
 _ttl_timer = None
 
 # État interne de l'agent
@@ -109,12 +109,12 @@ def _wipe_sensitive_data():
     if _state.get("username"):
         _state["username"] = None
 
-    # Effacement propre de la aes_key en mémoire
-    global _aes_key
-    if isinstance(_aes_key, bytearray):
-        for i in range(len(_aes_key)):
-            _aes_key[i] = 0
-    _aes_key = None
+    # Effacement propre de la master_key en mémoire
+    global _master_key
+    if isinstance(_master_key, bytearray):
+        for i in range(len(_master_key)):
+            _master_key[i] = 0
+    _master_key = None
 
     _state["locked"] = True
     print("[agent] données sensibles effacées.")
@@ -150,7 +150,7 @@ def _op_start(req):
     """
     Démarre la session sécurisée de l'agent.
     - Reçoit les infos utilisateur et le mot de passe
-    - Dérive la clé 'aes_key' en fonction du mot de pase
+    - Dérive la master_key en fonction du mot de passe
     - Démarre le TTL d'auto-clean
     """
     # Récupération des paramètres envoyés par le client
@@ -164,8 +164,8 @@ def _op_start(req):
 
     # dérivation clé AES
     salt = base64.b64decode(salt_b64)
-    global _aes_key
-    _aes_key = bytearray(derive_aes_key(password, salt))
+    global _master_key
+    _master_key = bytearray(derive_master_key(password, salt))
 
     # Mise à jour de l'état global
     _state.update({
@@ -196,11 +196,11 @@ def _op_shutdown(req=None):
 
 def _op_encrypt(req):
     """
-    Chiffre un texte clair à l'aide de la clé _aes_key en mémoire.
+    Chiffre un texte clair à l'aide de la master_key en mémoire.
     Renvoie ciphertext, nonce et tag en base64.
     """
-    global _aes_key
-    if not _aes_key:
+    global _master_key
+    if not _master_key:
         return {"status": "error", "data": {"code": "ERR_LOCKED"}}
 
     plaintext = req.get("data", {}).get("plaintext")
@@ -211,7 +211,7 @@ def _op_encrypt(req):
         plaintext = plaintext.encode("utf-8")
 
     # Chiffre
-    nonce, ciphertext, tag = encrypt_gcm(_aes_key, plaintext)
+    nonce, ciphertext, tag = encrypt_gcm(_master_key, plaintext)
 
     # Reset le TTL
     _schedule_auto_shutdown(_state["ttl"])
@@ -228,11 +228,11 @@ def _op_encrypt(req):
 
 def _op_decrypt(req):
     """
-    Déchiffre un text à l'aide de la clé _aes_key en mémoire.
+    Déchiffre un text à l'aide de la master_key en mémoire.
     Attend ciphertext, nonce et tag en base64.
     """
-    global _aes_key
-    if not _aes_key:
+    global _master_key
+    if not _master_key:
         return {"status": "error", "data": {"code": "ERR_LOCKED"}}
 
     data = req.get("data", {})
@@ -248,7 +248,7 @@ def _op_decrypt(req):
     tag = base64.b64decode(tag_b64)
 
     # Déchiffre
-    plaintext = decrypt_gcm(_aes_key, nonce, ciphertext, tag)
+    plaintext = decrypt_gcm(_master_key, nonce, ciphertext, tag)
 
     # Reset le TTL
     _schedule_auto_shutdown(_state["ttl"])
@@ -261,13 +261,13 @@ def _op_decrypt(req):
 
 def _op_hmac(req):
     """
-    Calcule un HMAC-SHA256(payload) avec la clé _aes_key en mémoire.
+    Calcule un HMAC-SHA256(payload) avec la master_key en mémoire.
     Entrée: data.payload_b64 (bytes encodés en base64)
     Sortie: data.hmac (base64 du digest)
     """
     # Vérifie qu'on a une clé en mémoire
-    global _aes_key
-    if not _aes_key:
+    global _master_key
+    if not _master_key:
         return {"status": "error", "data": {"code": "ERR_LOCKED"}}
 
     data = req.get("data", {})
@@ -282,7 +282,7 @@ def _op_hmac(req):
         return {"status": "error", "data": {"code": "ERR_BAD_BASE64", "message": str(e)}}
 
     # Calcule HMAC-SHA256
-    mac = hmac.new(bytes(_aes_key), payload, digestmod=hashlib.sha256).digest()
+    mac = hmac.new(bytes(_master_key), payload, digestmod=hashlib.sha256).digest()
     mac_b64 = base64.b64encode(mac).decode()
 
     # Reset le TTL

@@ -10,7 +10,7 @@ from client.utils.agent_client import AgentClient
 from client.utils.logger import notify_user
 from client.utils.logger import CTX
 from client.utils.crypto import (
-    derive_aes_key,
+    derive_master_key,
     encrypt_gcm,
     b64_block_from_bytes,
     generate_userkey_pair,
@@ -68,7 +68,7 @@ def register_account(args):
     salt_b64 = base64.b64encode(salt).decode()
     vkey_b64 = base64.b64encode(vkey).decode()
 
-    # Démarre l'agent, il dérive la aes_key
+    # Démarre l'agent, il dérive la master_key
     if not agent.start(username, password, salt_b64, logger):
         logger.error("Failed to initialize secure agent during registration")
         notify_user("Unable to start the secure agent. Please try again.")
@@ -77,7 +77,7 @@ def register_account(args):
     # Génération de la paire de clé RSA (2048 bits) appelée 'userkey"
     public_user_key, private_user_key = generate_userkey_pair()
     
-    # Chiffrement de la clé privée user key avec l'agent (qui contient la aes_key)    
+    # Chiffrement de la clé privée user key avec l'agent (qui contient la master_key)    
     private_key_b64 = base64.b64encode(private_user_key).decode()
     enc_data = agent.encrypt(private_key_b64, logger)
     private_key_block = {
@@ -230,7 +230,7 @@ def login_account(args):
             "tag": user_key.get("tag"),
         }
 
-        # Démarre l'agent, il dérive la aes_key
+        # Démarre l'agent, il dérive la master_key
         if not agent.start(username, password, salt_b64, logger):
             if attempt < MAX_PASSWORD_ATTEMPTS - 1:
                 notify_user("Incorrect username or password. Try again.")
