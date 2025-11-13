@@ -4,6 +4,7 @@ import readline
 import atexit
 from .core import auth
 from .core import vault
+from client.utils.agent_client import AgentClient
 
 class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):
@@ -120,12 +121,20 @@ def start_shell(_args=None):
 
     def refresh_prompt_user(force=False):
         nonlocal session_verified, prompt_user
-        if not force and session_verified is not None:
-            return
         if not auth.AccountState.PATH.exists():
             session_verified = False
             prompt_user = None
             return
+        
+        agent = AgentClient(autostart=False)
+        if not agent.sock_path.exists():
+            session_verified = False
+            prompt_user = None
+            return
+
+        if not force and session_verified is not None:
+            return
+
         session_verified = auth.AccountState.valid()
         prompt_user = auth.AccountState.username() if session_verified else None
 
