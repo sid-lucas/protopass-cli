@@ -7,12 +7,15 @@ from client.utils.network import api_post, handle_resp
 from client.utils import logger as log
 from client.utils.logger import CTX, notify_user
 from datetime import datetime, timezone
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import AES
-from Crypto.Cipher import PKCS1_OAEP
-from Crypto.Hash import SHA256
-from Crypto.Signature import pkcs1_15
-from Crypto.Random import get_random_bytes
+from client.utils.crypto import (
+    encrypt_gcm,
+    decrypt_gcm,
+    sign_vault_key,
+    wrap_vault_key,
+    unwrap_vault_key,
+    b64_block_from_bytes,
+    bytes_from_b64_block,
+)
 
 def _prompt_field(label, max_len, allow_empty=False):
     logger = log.get_logger(CTX.VAULT_CREATE, auth.AccountState.username())
@@ -31,6 +34,7 @@ def _prompt_field(label, max_len, allow_empty=False):
         return value
 
 def _fetch_vault_rows():
+    # récupération du contexte utilisateur actuel
     current_user = auth.AccountState.username()
     logger = log.get_logger(CTX.VAULT_LIST, current_user)
     session_payload = auth.AccountState.session_payload()
@@ -38,6 +42,7 @@ def _fetch_vault_rows():
         logger.error("No active session found in account state.")
         notify_user("No active session. Please log in.")
         return None
+    # requête API pour récupérer les vaults distants
     resp = api_post("/vault/list", session_payload, user=current_user)
     data = handle_resp(
         resp,
@@ -53,30 +58,37 @@ def _fetch_vault_rows():
         notify_user("No vaults found.")
         return None
     
+    # récupération de la clé privée locale pour déchiffrer les données
     private_key = auth.AccountState.private_key()
     if private_key is None:
         logger.error("No valid private key in account state (memory).")
         notify_user("Unable to decrypt vaults with current keys.")
         return None
-    rsa_cipher = PKCS1_OAEP.new(RSA.import_key(private_key))
     
+    # boucle sur chaque coffre pour construire les lignes d'affichage
     rows = []
     for vault in vaults:
         vault_id = vault.get("vault_id", "unknown")
         try:
-            # Déchiffrement de la vault_key
+            # Déchiffrement des métadonnées
             vault_key_enc = base64.b64decode(vault["key_enc"])
-            vault_key = rsa_cipher.decrypt(vault_key_enc)
+            vault_key = unwrap_vault_key(private_key, vault_key_enc)
 
-            # Déchiffrement du nom du vault
-            vault_name = decrypt_metadata(vault["name"], vault_key)
-            description = decrypt_metadata(vault.get("description"), vault_key)
-            created_at = decrypt_metadata(vault.get("created_at"), vault_key)
+            enc, nonce, tag = bytes_from_b64_block(vault["name"])
+            vault_name = decrypt_gcm(vault_key, enc, nonce, tag).decode()
+            if vault.get("description"):
+                enc, nonce, tag = bytes_from_b64_block(vault["description"])
+                description = decrypt_gcm(vault_key, enc, nonce, tag).decode()
+            else:
+                description = None
+            enc, nonce, tag = bytes_from_b64_block(vault["created_at"])
+            created_at = decrypt_gcm(vault_key, enc, nonce, tag).decode()
 
         except Exception as e:
             logger.warning(f"Failed to decrypt vault '{vault_id[:8]}' ({e})")
             continue
 
+        # ajoute le nouveau vault lu dans une ligne
         rows.append({
             "idx": str(len(rows) + 1),
             "name": vault_name or "-",
@@ -86,34 +98,6 @@ def _fetch_vault_rows():
         })
 
     return rows
-
-
-    
-def encrypt_metadata(key: bytes, value: str | None) -> dict | None:
-    if not value:
-        return None
-    nonce = get_random_bytes(12)
-    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
-    enc, tag = cipher.encrypt_and_digest(value.encode())
-    return {
-        f"enc": base64.b64encode(enc).decode(),
-        f"nonce": base64.b64encode(nonce).decode(),
-        f"tag": base64.b64encode(tag).decode(),
-    }
-
-def decrypt_metadata(blob: dict | None, key: bytes) -> str | None:
-    if not blob:
-        return None
-    try:
-        enc = base64.b64decode(blob["enc"])
-        nonce = base64.b64decode(blob["nonce"])
-        tag = base64.b64decode(blob["tag"])
-        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
-        return cipher.decrypt_and_verify(enc, tag).decode()
-    except Exception as err:
-        log.error(CTX.VAULT_LIST, f"Failed to decrypt metadata: {err}", auth.AccountState.username())
-        return None
-
 
 
 def delete_vault(args):
@@ -150,8 +134,6 @@ def list_vaults(_args):
     if not rows:
         return
 
-    #log_client("info", "Vault List", f"Name: '{vault_name}', Vault ID: {vault_id[:8]}...")
-
     columns = [
         ("idx", "#", 3),
         ("name", "Name", 15),
@@ -183,17 +165,23 @@ def create_vault(_args):
     vault_key = os.urandom(32)
 
     # signature de la clé du vault avec la clé privée de l'utilisateur
-    vault_key_hash = SHA256.new(vault_key).digest()
-    vault_signature = pkcs1_15.new(RSA.import_key(private_key)).sign(SHA256.new(vault_key_hash))
+    vault_signature = sign_vault_key(private_key, vault_key)
 
     # chiffre la clé du vault avec la clé publique de l'utilisateur
-    cipher = PKCS1_OAEP.new(RSA.import_key(public_key))
-    vault_key_enc = cipher.encrypt(vault_key)
+    vault_key_enc = wrap_vault_key(public_key, vault_key)
 
     # chiffrement des metadonnées du vault avec la vault_key
-    name_blob = encrypt_metadata(vault_key, vault_name)
-    desc_blob = encrypt_metadata(vault_key, description)
-    time_blob = encrypt_metadata(vault_key, created_at)
+    ciphertext, nonce, tag = encrypt_gcm(vault_key, vault_name.encode())
+    name_blob = b64_block_from_bytes(ciphertext, nonce, tag)
+
+    if description:
+        ciphertext, nonce, tag = encrypt_gcm(vault_key, description.encode())
+        desc_blob = b64_block_from_bytes(ciphertext, nonce, tag)
+    else:
+        desc_blob = None
+
+    ciphertext, nonce, tag = encrypt_gcm(vault_key, created_at.encode())
+    time_blob = b64_block_from_bytes(ciphertext, nonce, tag)
 
     # Pas d'items créés pour l'instant
 
