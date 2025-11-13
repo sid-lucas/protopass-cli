@@ -121,15 +121,13 @@ def start_shell(_args=None):
 
     def refresh_prompt_user(force=False):
         nonlocal session_verified, prompt_user
-        if not auth.AccountState.PATH.exists():
-            session_verified = False
-            prompt_user = None
-            return
-        
+
         agent = AgentClient(autostart=False)
-        if not agent.sock_path.exists():
+        if not auth.AccountState.PATH.exists() or not agent.sock_path.exists():
             session_verified = False
             prompt_user = None
+            # TODO ICI CA FAIT ENLEVE JUSTE L'AFFICHAGE DE L'USER QUAND L'AGENT EXPIRE
+            # TODO FAIRE EN SORTE QUE CA LE DECONNECTE AUSSI (avec clean accountstate.json etc...)
             return
 
         if not force and session_verified is not None:
