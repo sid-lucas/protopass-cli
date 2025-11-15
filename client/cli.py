@@ -5,6 +5,7 @@ import atexit
 from .core import auth
 from .core import vault
 from client.utils.agent_client import AgentClient
+from client.utils.logger import notify_user
 
 class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):
@@ -118,16 +119,30 @@ def start_shell(_args=None):
 
     session_verified = None  # Evite de revalider la session à chaque appui sur Entrée
     prompt_user = None  # Username affiché seulement si la session a été confirmée
+    agent_missing_notified = False
+
+    def ensure_agent_presence():
+        nonlocal agent_missing_notified
+        if not auth.AccountState.PATH.exists():
+            return False
+
+        agent = AgentClient(autostart=False)
+        if agent.sock_path.exists():
+            agent_missing_notified = False
+            return True
+
+        if not agent_missing_notified:
+            auth.AccountState.clear()
+            notify_user("You got logged out due to inactivity.")
+            agent_missing_notified = True
+        return False
 
     def refresh_prompt_user(force=False):
         nonlocal session_verified, prompt_user
 
-        agent = AgentClient(autostart=False)
-        if not auth.AccountState.PATH.exists() or not agent.sock_path.exists():
+        if not ensure_agent_presence():
             session_verified = False
             prompt_user = None
-            # TODO ICI CA FAIT ENLEVE JUSTE L'AFFICHAGE DE L'USER QUAND L'AGENT EXPIRE
-            # TODO FAIRE EN SORTE QUE CA LE DECONNECTE AUSSI (avec clean accountstate.json etc...)
             return
 
         if not force and session_verified is not None:
@@ -151,6 +166,10 @@ def start_shell(_args=None):
             if raw_line in help_keywords:
                 parser.print_help()
                 continue
+
+            # Si l'agent a expiré pendant que l'utilisateur saisissait sa commande,
+            # force une vérification avant d'analyser la commande.
+            refresh_prompt_user(force=True)
 
             args_list = shlex.split(raw_line)
 
