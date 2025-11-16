@@ -1,14 +1,11 @@
-import getpass
-import base64
-import json
-import os
+import base64, json, os
 from pathlib import Path
-from ..utils import logger as log
-from client.utils.logger import CTX, notify_user
-from client.utils.network import api_post, handle_resp
 from Crypto.Hash import SHA256
-from client.utils.crypto import canonical_json
-from client.utils.agent_client import AgentClient
+from ..utils import logger as log
+from ..utils.logger import CTX, notify_user
+from ..utils.network import api_post, handle_resp
+from ..utils.crypto import canonical_json
+from ..utils.agent_client import AgentClient
 
 """
 Structure de account_state.json :
@@ -44,6 +41,8 @@ class AccountState:
     _cached_public_key = None  # idem
     _private_key = None  # Pour des questions de sécurité
     _vault_keys = {}  # Cache mémoire des clés de vault déchiffrées
+    _current_vault_id = None
+
 
     PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
 
@@ -397,7 +396,7 @@ class AccountState:
             _maybe_load("session", _set_session)
 
     # ============================================================
-    # Gestion des clés de vault (cache mémoire uniquement)
+    # Gestion des vaults (cache mémoire uniquement)
     # ============================================================
 
     @classmethod
@@ -420,3 +419,16 @@ class AccountState:
                 for idx in range(len(value)):
                     value[idx] = 0
         cls._vault_keys.clear()
+
+    @classmethod
+    def set_current_vault(cls, vault_id: str):
+        cls._current_vault_id = vault_id
+
+    @classmethod
+    def clear_current_vault(cls):
+        cls._current_vault_id = None
+
+    @classmethod
+    def current_vault(cls):
+        return cls._current_vault_id
+

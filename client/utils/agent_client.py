@@ -1,11 +1,4 @@
-import base64
-import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import uuid
+import base64, json, os,socket, subprocess, sys, time, uuid
 from pathlib import Path
 
 APP_DIR = Path.home() / ".protopass"

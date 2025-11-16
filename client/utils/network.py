@@ -1,7 +1,6 @@
-import logging
-import requests
-from client.utils import logger as log
-from client.utils.logger import CTX
+import logging, requests
+from ..utils import logger as log
+from ..utils.logger import CTX
 
 SERVER_URL = "http://127.0.0.1:5000"
 DEBUG_CONTEXTS = {CTX.SESSION_VERIFY, CTX.SRP_START, CTX.SRP_VERIFY}

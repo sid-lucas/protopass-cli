@@ -1,13 +1,11 @@
-import base64
-import uuid
-import os
-from client.core import auth
-from client.utils.display import render_table, format_timestamp
-from client.utils.network import api_post, handle_resp
-from client.utils import logger as log
-from client.utils.logger import CTX, notify_user
+import base64, uuid, os
 from datetime import datetime, timezone
-from client.utils.crypto import (
+from .account_state import AccountState
+from ..utils.display import render_table, format_timestamp
+from ..utils.network import api_post, handle_resp
+from ..utils import logger as log
+from ..utils.logger import CTX, notify_user
+from ..utils.crypto import (
     encrypt_gcm,
     decrypt_gcm,
     sign_vault_key,
@@ -18,7 +16,7 @@ from client.utils.crypto import (
 )
 
 def _prompt_field(label, max_len, allow_empty=False):
-    logger = log.get_logger(CTX.VAULT_CREATE, auth.AccountState.username())
+    logger = log.get_logger(CTX.VAULT_CREATE, AccountState.username())
     while True:
         value = input(f"{label} (max {max_len} chars): ").strip()
         if not value and allow_empty:
@@ -34,10 +32,14 @@ def _prompt_field(label, max_len, allow_empty=False):
         return value
 
 def _fetch_vault_rows():
+    """
+    Récupère tous les vaults depuis le serveur, déchiffre leurs métadonnées
+    et retourne une liste de lignes prêtes pour l'affichage dans vault list
+    """
     # récupération du contexte utilisateur actuel
-    current_user = auth.AccountState.username()
+    current_user = AccountState.username()
     logger = log.get_logger(CTX.VAULT_LIST, current_user)
-    session_payload = auth.AccountState.session_payload()
+    session_payload = AccountState.session_payload()
     if session_payload is None:
         logger.error("No active session found in account state.")
         notify_user("No active session. Please log in.")
@@ -59,7 +61,7 @@ def _fetch_vault_rows():
         return None
     
     # récupération de la clé privée locale pour déchiffrer les données
-    private_key = auth.AccountState.private_key()
+    private_key = AccountState.private_key()
     if private_key is None:
         logger.error("No valid private key in account state (memory).")
         notify_user("Unable to decrypt vaults with current keys.")
@@ -73,6 +75,9 @@ def _fetch_vault_rows():
             # Déchiffrement des métadonnées
             vault_key_enc = base64.b64decode(vault["key_enc"])
             vault_key = unwrap_vault_key(private_key, vault_key_enc)
+
+            # met la clé de ce vault en cache RAM
+            AccountState.set_vault_key(vault_id, vault_key)
 
             enc, nonce, tag = bytes_from_b64_block(vault["name"])
             vault_name = decrypt_gcm(vault_key, enc, nonce, tag).decode()
@@ -99,29 +104,45 @@ def _fetch_vault_rows():
 
     return rows
 
+def _get_vault_uuid_by_index(index: int, logger):
+    """
+    Retourne l'UUID du vault correspondant à l'index affiché dans vault list,
+    ou None si introuvable ou si aucune ligne.
+    """
+    rows = _fetch_vault_rows()
+    failed = False
+
+    if not rows:
+        failed = True
+
+    if not failed :
+        for row in rows:
+            if row.get("idx") == str(index):
+                return row.get("uuid")
+
+
+    notify_user(f"No vault found for index '{index}'")
+    logger.error(f"No vault associated with index '{index}', deletion aborted")
+    return None
+
+
 
 def delete_vault(args):
-    current_user = auth.AccountState.username()
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.VAULT_DELETE, AccountState.username())
+
     rows = _fetch_vault_rows()
     if not rows:
         return
     
-    vault_id_to_del = None
-    logger = log.get_logger(CTX.VAULT_DELETE, auth.AccountState.username())
-    
-    for row in rows:
-        if row.get("idx") == str(args.index):
-            vault_id_to_del = row.get("uuid")
-            break
-
+    # Trouver le vault via l'index
+    vault_id_to_del = _get_vault_uuid_by_index(args.index, logger)
     if vault_id_to_del is None:
-        notify_user(f"No vault found for index '{args.index}'")
-        logger.error(f"No vault associated with index '{args.index}', deletion aborted")
         return
 
     notify_user(f"found vault id to del : {vault_id_to_del}")
 
-    session_payload = auth.AccountState.session_payload()
+    session_payload = AccountState.session_payload()
     if session_payload is None:
         logger.error("No valid session found in account state.")
         return
@@ -140,20 +161,64 @@ def delete_vault(args):
     if data is None:
         notify_user("Vault deletion failed. See logs for details.")
         return
+    
+    #
+    # TODO SI ON SUPPRIME LE VAULT SELECTIONNE
+    # TODO  VERIFIER SI ON DOIT PAS CLEAR ACCOUNT STATE DU VAULT SELECTED (et vault_keys)!!
 
     notify_user(f"Vault deleted successfully.")
 
 def select_vault(args):
-    print("select")
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.VAULT_SELECT, current_user)
+
+    # On récupère les lignes (et, par effet de bord, on remplit _vault_keys)
+    rows = _fetch_vault_rows()
+    if not rows:
+        return
+
+    # Retrouve l'UUID à partir de l'index
+    vault_id = _get_vault_uuid_by_index(args.index, logger)
+    if vault_id is None:
+        return
+
+    # Essaie de récupérer la clé en RAM (si elle y est déjà)
+    vault_key = AccountState.vault_key(vault_id)
+    if vault_key is None:
+        # Si pas en RAM, on déclenche un fetch complet (equivalent de vault list)
+        rows = _fetch_vault_rows()
+        if not rows:
+            return
+
+        # Maintenant la clé DOIT être en RAM si tout s’est bien passé
+        vault_key = AccountState.vault_key(vault_id)
+        if vault_key is None:
+            logger.error(f"Failed to load vault_key for vault {vault_id}")
+            notify_user("Unable to decrypt selected vault key.")
+            return
+
+    # Maj du vault courant
+    AccountState.set_current_vault(vault_id)
+
+    notify_user(f"Vault {args.index} is now selected.")
+
     
 def list_vaults(_args):
-    if not auth.AccountState.valid():
+    if not AccountState.valid():
         print("Please login to list vaults.")
         return
 
     rows = _fetch_vault_rows()
     if not rows:
         return
+    
+    # Ajout du marqueur "*" sur le vault sélectionné
+    current = AccountState.current_vault()
+    if current:
+        for row in rows:
+            if row["uuid"] == current:
+                row["idx"] = "*" + row["idx"]
+                break
 
     columns = [
         ("idx", "#", 3),
@@ -164,9 +229,9 @@ def list_vaults(_args):
     print(render_table(rows, columns))
 
 def create_vault(_args):
-    current_user = auth.AccountState.username()
-    public_key = auth.AccountState.public_key()
-    private_key = auth.AccountState.private_key()
+    current_user = AccountState.username()
+    public_key = AccountState.public_key()
+    private_key = AccountState.private_key()
     if current_user is None or public_key is None or private_key is None:
         notify_user(
             "Vault creation aborted: local account state is invalid.\n"
@@ -206,7 +271,7 @@ def create_vault(_args):
 
     # Pas d'items créés pour l'instant
 
-    session_payload = auth.AccountState.session_payload()
+    session_payload = AccountState.session_payload()
     if session_payload is None:
         logger.error("No valid session found in account state.")
         return

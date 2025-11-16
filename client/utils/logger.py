@@ -14,6 +14,7 @@ class LogContext(str, Enum):
     VAULT_LIST = "Vault List"
     VAULT_CREATE = "Vault Create"
     VAULT_DELETE = "Vault Delete"
+    VAULT_SELECT = "Vault Select"
     ACCOUNT_STATE = "Account State"
     SESSION = "Session"
     SESSION_VERIFY = "Session Verify"

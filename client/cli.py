@@ -1,11 +1,8 @@
-import argparse
-import os
-import readline
-import atexit
+import argparse, os, readline, atexit
 from .core import auth
 from .core import vault
-from client.utils.agent_client import AgentClient
-from client.utils.logger import notify_user
+from .utils.agent_client import AgentClient
+from .utils.logger import notify_user
 
 class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):
@@ -76,7 +73,7 @@ def build_parser():
     p_vault_delete.set_defaults(func=vault.delete_vault)
 
     p_vault_select = vault_sub.add_parser("select", help="Select a vault to use")
-    p_vault_select.add_argument("--name", required=True, help="Name of the vault to select")
+    p_vault_select.add_argument("index", type=int, help="Index as shown in vault list")
     p_vault_select.set_defaults(func=vault.select_vault)
 
     p_vault_list = vault_sub.add_parser("list", help="List all vaults")

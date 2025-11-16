@@ -1,10 +1,10 @@
 import os, json, socket, signal, sys, time, errno, threading, base64, hmac, hashlib
 from pathlib import Path
-from client.utils.crypto import (
+from ..utils import logger as log
+from ..utils.crypto import (
     derive_master_key,
     encrypt_gcm, decrypt_gcm,
 )
-from client.utils import logger as log
 
 """
 Protopass Agent — Processus local sécurisé

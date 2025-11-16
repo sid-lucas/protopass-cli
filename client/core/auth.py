@@ -1,18 +1,12 @@
-import getpass
-import base64
-import srp
-import re
+import getpass, base64, srp, re
 from Crypto.Hash import SHA256
 from .account_state import AccountState
 from ..utils import logger as log
-from client.utils.network import api_post, handle_resp
-from client.utils.agent_client import AgentClient
-from client.utils.logger import notify_user
-from client.utils.logger import CTX
-from client.utils.crypto import (
-    derive_master_key,
-    encrypt_gcm,
-    b64_block_from_bytes,
+from ..utils.network import api_post, handle_resp
+from ..utils.agent_client import AgentClient
+from ..utils.logger import notify_user
+from ..utils.logger import CTX
+from ..utils.crypto import (
     generate_userkey_pair,
 )
 
