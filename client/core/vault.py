@@ -124,9 +124,9 @@ def _get_vault_uuid_by_index(index: int, rows=None, logger=None):
                 return row.get("uuid")
 
 
-    notify_user(f"No vault found for index '{index}'")
+    notify_user(f"No vault found for index {index}.")
     if logger:
-        logger.error(f"No vault associated with index '{index}', deletion aborted")
+        logger.error(f"No vault associated with index '{index}'")
     return None
 
 

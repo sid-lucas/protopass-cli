@@ -43,6 +43,7 @@ class AccountState:
     _private_key = None  # Pour des questions de sécurité
     _vault_keys = {}  # Cache mémoire des clés de vault déchiffrées
     _current_vault_id = None
+    _current_vault_loaded = False
     _last_session_valid = None
     _last_session_check = 0.0
 
@@ -104,26 +105,7 @@ class AccountState:
             "session": session_block,
         }
 
-        # Signature via l'agent actif
-        agent = AgentClient()
-        mac_data = canonical_json(payload).encode()
-        mac_resp = agent.hmac(mac_data, logger)
-        mac_value = mac_resp.get("hmac") if mac_resp else None
-
-        if not mac_value:
-            logger.error("Failed to compute integrity MAC via agent")
-            return False
-
-        payload["integrity"] = {"value": mac_value, "algo": "HMAC-SHA256"}
-
-        # Création du fichier .json
-        try:
-            payload_json = json.dumps(payload, indent=2)
-            fd = os.open(str(cls.PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(payload_json)
-        except Exception as exc:
-            logger.error(f"Unable to persist account state: {exc}")
+        if not cls._persist_payload(payload, logger):
             return False
 
         # Sauvegarde de certaine valeur en cache
@@ -134,6 +116,33 @@ class AccountState:
             cls._cached_public_key = None
             logger.warning(f"Unable to cache public key: {exc}")
         cls._reset_session_cache()
+        return True
+
+    @classmethod
+    def _persist_payload(cls, payload, logger):
+        """Recalcule l'intégrité et écrit le fichier account_state.json."""
+        agent = AgentClient()
+        mac_data = canonical_json(payload).encode()
+        mac_resp = agent.hmac(mac_data, logger)
+        mac_value = mac_resp.get("hmac") if mac_resp else None
+
+        if not mac_value:
+            logger.error("Failed to compute integrity MAC via agent")
+            return False
+
+        payload_with_mac = dict(payload)
+        payload_with_mac["integrity"] = {"value": mac_value, "algo": "HMAC-SHA256"}
+
+        try:
+            payload_json = json.dumps(payload_with_mac, indent=2)
+            cls.PATH.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(str(cls.PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload_json)
+        except Exception as exc:
+            logger.error(f"Unable to persist account state: {exc}")
+            return False
+
         return True
 
     @classmethod
@@ -148,6 +157,22 @@ class AccountState:
         return status
 
     @classmethod
+    def _persist_current_vault(cls, vault_id: str | None):
+        data = cls._read()
+        if not data:
+            return
+
+        payload = {k: v for k, v in data.items() if k != "integrity"}
+        if vault_id:
+            payload["current_vault"] = vault_id
+        else:
+            payload.pop("current_vault", None)
+
+        username = payload.get("username") or cls._cached_username or ""
+        logger = log.get_logger(CTX.ACCOUNT_STATE, username)
+        cls._persist_payload(payload, logger)
+
+    @classmethod
     def clear(cls):
         if cls.PATH.exists():
             cls.PATH.unlink()
@@ -156,6 +181,8 @@ class AccountState:
         cls._cached_session_id = None # Ne nettoie pas les bytes en mémoire comme la clé privée... cela peut être une amélioration
         cls.clear_private_key()
         cls.clear_vault_keys()
+        cls._current_vault_id = None
+        cls._current_vault_loaded = False
         cls._reset_session_cache()
 
     # ============================================================
@@ -444,11 +471,27 @@ class AccountState:
     @classmethod
     def set_current_vault(cls, vault_id: str):
         cls._current_vault_id = vault_id
+        cls._current_vault_loaded = True
+        cls._persist_current_vault(vault_id)
 
     @classmethod
     def clear_current_vault(cls):
         cls._current_vault_id = None
+        cls._current_vault_loaded = True
+        cls._persist_current_vault(None)
 
     @classmethod
     def current_vault(cls):
+        if not cls._current_vault_loaded:
+            cls._load_current_vault_from_disk()
+        return cls._current_vault_id
+
+    @classmethod
+    def _load_current_vault_from_disk(cls):
+        data = cls._read()
+        if not data:
+            cls._current_vault_id = None
+        else:
+            cls._current_vault_id = data.get("current_vault")
+        cls._current_vault_loaded = True
         return cls._current_vault_id
