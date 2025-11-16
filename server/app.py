@@ -211,8 +211,7 @@ def create_vault(username):
         vault_id = data["vault_id"]
         add_vault(
             username, vault_id, data["key_enc"], data["signature"],
-            data["name"], data["description"], data["created_at"],
-            data["items"]
+            data["content"], data["items"]
         )
     # Erreur données manquantes
     except KeyError as e:

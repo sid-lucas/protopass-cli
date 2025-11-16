@@ -24,6 +24,11 @@ Structure de account_state.json :
     "nonce": "...",           // b64
     "tag": "..."              // b64
   }
+  "current_vault": "..."      // UUID vault sélectionné (optionnel)
+  "integrity": {
+    "value": "...",           // b64
+    "algo": "HMAC-SHA256"     // string
+  }
 }
 """
 

@@ -1,4 +1,4 @@
-import base64, uuid, os
+import base64, uuid, os, json
 from datetime import datetime, timezone
 from .account_state import AccountState
 from ..utils.display import render_table, format_timestamp
@@ -79,15 +79,16 @@ def _fetch_vault_rows():
             # met la clé de ce vault en cache RAM
             AccountState.set_vault_key(vault_id, vault_key)
 
-            enc, nonce, tag = bytes_from_b64_block(vault["name"])
-            vault_name = decrypt_gcm(vault_key, enc, nonce, tag).decode()
-            if vault.get("description"):
-                enc, nonce, tag = bytes_from_b64_block(vault["description"])
-                description = decrypt_gcm(vault_key, enc, nonce, tag).decode()
-            else:
-                description = None
-            enc, nonce, tag = bytes_from_b64_block(vault["created_at"])
-            created_at = decrypt_gcm(vault_key, enc, nonce, tag).decode()
+            content_blob = vault.get("content")
+            if not content_blob:
+                raise ValueError("missing content blob")
+            enc, nonce, tag = bytes_from_b64_block(content_blob)
+            plaintext = decrypt_gcm(vault_key, enc, nonce, tag).decode()
+            content = json.loads(plaintext)
+            vault_name = content.get("name")
+            description = content.get("description")
+            created_at = content.get("created_at")
+            created_display = format_timestamp(created_at) if created_at else "-"
 
         except Exception as e:
             logger.warning(f"Failed to decrypt vault '{vault_id[:8]}' ({e})")
@@ -98,7 +99,7 @@ def _fetch_vault_rows():
             "idx": str(len(rows) + 1),
             "name": vault_name or "-",
             "desc": description or "-",
-            "created": format_timestamp(created_at),
+            "created": created_display,
             "uuid": vault["vault_id"]
         })
 
@@ -262,18 +263,15 @@ def create_vault(_args):
     # chiffre la clé du vault avec la clé publique de l'utilisateur
     vault_key_enc = wrap_vault_key(public_key, vault_key)
 
-    # chiffrement des metadonnées du vault avec la vault_key
-    ciphertext, nonce, tag = encrypt_gcm(vault_key, vault_name.encode())
-    name_blob = b64_block_from_bytes(ciphertext, nonce, tag)
-
-    if description:
-        ciphertext, nonce, tag = encrypt_gcm(vault_key, description.encode())
-        desc_blob = b64_block_from_bytes(ciphertext, nonce, tag)
-    else:
-        desc_blob = None
-
-    ciphertext, nonce, tag = encrypt_gcm(vault_key, created_at.encode())
-    time_blob = b64_block_from_bytes(ciphertext, nonce, tag)
+    # chiffrement des métadonnées du vault avec la vault_key
+    vault_plain = {
+        "name": vault_name,
+        "description": description,
+        "created_at": created_at,
+    }
+    vault_plaintext = json.dumps(vault_plain)
+    ciphertext, nonce, tag = encrypt_gcm(vault_key, vault_plaintext.encode())
+    content_blob = b64_block_from_bytes(ciphertext, nonce, tag)
 
     # Pas d'items créés pour l'instant
 
@@ -287,9 +285,7 @@ def create_vault(_args):
         "vault_id": vault_id,
         "key_enc": base64.b64encode(vault_key_enc).decode(),
         "signature": base64.b64encode(vault_signature).decode(),
-        "name": name_blob,
-        "description": desc_blob,
-        "created_at": time_blob,
+        "content": content_blob,
         "items": []
     }
     resp = api_post("/vault/create", payload, user=current_user)
