@@ -228,6 +228,7 @@ class AccountState:
     def session_payload(cls):
         session_id = cls.session_id()
         if not session_id:
+            notify_user("No active session. Please log in.")
             return None
         payload = {"session_id": session_id}
         username = cls.username()

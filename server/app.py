@@ -1,6 +1,6 @@
 from flask import Flask, request
 from server.user_store import add_user, get_user
-from server.vault_store import add_vault, get_user_vaults
+from server.vault_store import add_vault, get_user_vaults, delete_vault
 from server.session_store import create_session, revoke_session, is_valid, get_session
 import base64, srp
 from functools import wraps
@@ -221,7 +221,6 @@ def create_vault(username):
     except ValueError as e:
         return make_resp("error", "Vault Create", str(e), 409)
 
-    # stocke simplement les données reçues concernant le nouveau vault
     return make_resp("ok", "Vault create", f"Vault '{vault_id[:8]}...' created successfully", 201,
         data={"vault_id": vault_id}
     )
@@ -235,6 +234,27 @@ def list_vaults(username):
     vaults = get_user_vaults(username)
     vaults_count = len(vaults)
     return make_resp("ok", "Vault List", f"{vaults_count} vault(s) retrieved", 200, data={"vaults": vaults})
+
+@app.post("/vault/delete")
+@require_session
+def delete_vault_route(username):
+    data = request.get_json(force=True)
+    vault_id = data.get("vault_id")
+
+    if not vault_id:
+        return make_resp("error", "Vault Delete", "missing vault_id", 400)
+
+    print("ok1")
+
+    ok = delete_vault(username, vault_id)
+
+    if not ok:
+        return make_resp("error", "Vault Delete", "vault not found", 404)
+    print("ok2")
+
+    return make_resp("ok", "Vault Delete", f"Vault '{vault_id[:8]}...' deleted", 200,
+        data={"vault_id": vault_id}
+    )
 
 
 

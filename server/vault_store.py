@@ -39,3 +39,16 @@ def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, n
     vaults.append(new_vault)
     _save_user_vaults(username_hash, vaults)
     return True
+
+def delete_vault(username_hash: str, vault_id: str) -> bool:
+    vaults = get_user_vaults(username_hash)
+
+    # filtre tous les vaults sauf celui ciblé
+    filtered = [v for v in vaults if v["vault_id"] != vault_id]
+
+    if len(filtered) == len(vaults):
+        # aucun vault supprimé, id inconnu
+        return False
+
+    _save_user_vaults(username_hash, filtered)
+    return True

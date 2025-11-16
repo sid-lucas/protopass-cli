@@ -101,6 +101,7 @@ def _fetch_vault_rows():
 
 
 def delete_vault(args):
+    current_user = auth.AccountState.username()
     rows = _fetch_vault_rows()
     if not rows:
         return
@@ -119,6 +120,26 @@ def delete_vault(args):
         return
 
     notify_user(f"found vault id to del : {vault_id_to_del}")
+
+    session_payload = auth.AccountState.session_payload()
+    if session_payload is None:
+        logger.error("No valid session found in account state.")
+        return
+    # Envoie les informations du nouveau vault au serveur
+    payload = {
+        **session_payload,
+        "vault_id": vault_id_to_del,
+    }
+    resp = api_post("/vault/delete", payload, user=current_user)
+    data = handle_resp(
+        resp,
+        required_fields=["vault_id"],
+        context=CTX.VAULT_DELETE,
+        user=current_user
+    )
+    if data is None:
+        notify_user("Vault deletion failed. See logs for details.")
+        return
 
     notify_user(f"Vault deleted successfully.")
 
@@ -188,7 +209,6 @@ def create_vault(_args):
     session_payload = auth.AccountState.session_payload()
     if session_payload is None:
         logger.error("No valid session found in account state.")
-        notify_user("No active session. Please log in.")
         return
     # Envoie les informations du nouveau vault au serveur
     payload = {
