@@ -1,6 +1,7 @@
 import argparse, os, readline, atexit
 from .core import auth
 from .core import vault
+from .core import item
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
@@ -82,6 +83,18 @@ def build_parser():
 
     p_vault_list = vault_sub.add_parser("list", help="List all vaults")
     p_vault_list.set_defaults(func=vault.list_vaults)
+
+    # ============================================================
+    # Commandes gestion item
+    # ============================================================
+    p_item = subparsers.add_parser("item", help="Manage items")
+    # Crée un sous-sous-parseur pour les actions item (create/delete/...)
+    item_sub = p_item.add_subparsers(dest="item_command")
+    p_item.set_defaults(func=lambda args: p_item.print_help())
+
+    p_item_create = item_sub.add_parser("create", help="Create a new item in the selected vault")
+    p_item_create.set_defaults(func=item.create_item)
+
 
     return parser
 

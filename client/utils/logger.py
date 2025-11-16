@@ -11,14 +11,18 @@ class LogContext(str, Enum):
     SRP_START = "SRP Start"
     SRP_VERIFY = "SRP Verify"
     FETCH_USER_KEY = "Fetch User Key"
-    VAULT_LIST = "Vault List"
-    VAULT_CREATE = "Vault Create"
-    VAULT_DELETE = "Vault Delete"
-    VAULT_SELECT = "Vault Select"
     ACCOUNT_STATE = "Account State"
     SESSION = "Session"
     SESSION_VERIFY = "Session Verify"
     DECRYPT = "Decrypt"
+    VAULT_LIST = "Vault List"
+    VAULT_CREATE = "Vault Create"
+    VAULT_DELETE = "Vault Delete"
+    VAULT_SELECT = "Vault Select"
+    ITEM_LIST = "Item List"
+    ITEM_CREATE = "Item Create"
+    ITEM_DELETE = "Item Delete"
+    ITEM_SELECT = "Item Select"
 
 
 CTX = LogContext

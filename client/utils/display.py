@@ -1,6 +1,9 @@
 import textwrap
 from datetime import datetime
 from typing import Iterable, Mapping, Sequence
+from utils import logger as log
+from utils.logger import CTX, notify_user
+from ..core.account_state import AccountState
 
 
 def _shorten(text, width):
@@ -49,3 +52,20 @@ def render_table(rows: Iterable[Mapping[str, str]], columns: Sequence[tuple[str,
     lines.append(f"Total: {len(materialized_rows)} vault(s)")
 
     return "\n" + "\n".join(lines)
+
+
+def prompt_field(label, max_len, allow_empty=False):
+    logger = log.get_logger(CTX.VAULT_CREATE, AccountState.username())
+    while True:
+        value = input(f"{label} (max {max_len} chars): ").strip()
+        if not value and allow_empty:
+            return None
+        if not value:
+            logger.warning(f"Empty value provided for '{label}'")
+            notify_user("This field cannot be empty.")
+            continue
+        if len(value) > max_len:
+            logger.warning(f"Value for '{label}' exceeds {max_len} characters")
+            notify_user(f"Value must be ≤ {max_len} characters.")
+            continue
+        return value

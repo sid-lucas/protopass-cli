@@ -2,7 +2,7 @@ import base64, srp
 from flask import Flask, request
 from functools import wraps
 from server.user_store import add_user, get_user
-from server.vault_store import add_vault, get_user_vaults, delete_vault
+from server.vault_store import add_vault, get_user_vaults, delete_vault, add_item
 from server.session_store import create_session, revoke_session, is_valid, get_session
 from server.utils.response import make_resp
 
@@ -211,7 +211,7 @@ def create_vault(username):
         vault_id = data["vault_id"]
         add_vault(
             username, vault_id, data["key_enc"], data["signature"],
-            data["content"], data["items"]
+            data["metadata"], data["items"]
         )
     # Erreur données manquantes
     except KeyError as e:
@@ -250,6 +250,32 @@ def delete_vault_route(username):
 
     return make_resp("ok", "Vault Delete", f"Vault '{vault_id[:8]}...' deleted", 200,
         data={"vault_id": vault_id}
+    )
+
+@app.post("/item/create")
+@require_session
+def create_item(username):
+    """
+    Crée un nouvel item dans un vault de l'utilisateur authentifié.
+    """
+    data = request.get_json(force=True) or {}
+
+    vault_id = data.get("vault_id")
+    item = data.get("item")
+
+    if not vault_id or not item:
+        return make_resp("error", "Item Create", "missing vault_id or item", 400)
+
+    try:
+        ok = add_item(username, vault_id, item)
+    except ValueError as e:
+        return make_resp("error", "Item Create", str(e), 400)
+
+    if not ok:
+        return make_resp("error", "Item Create", "unable to add item", 500)
+
+    return make_resp("ok", "Item Create", f"Item '{item.get('item_id')[:8]}...' created successfully", 201,
+        data={"item_id": item.get("item_id")}
     )
 
 

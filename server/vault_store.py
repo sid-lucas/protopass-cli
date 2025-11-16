@@ -19,8 +19,7 @@ def get_user_vaults(username_hash: str) -> list:
         return []
     return json.loads(path.read_text())
 
-
-def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, content: dict, items: list):
+def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, metadata: dict, items: list):
     vaults = get_user_vaults(username_hash)
 
     if any(vault["vault_id"] == vault_id for vault in vaults):
@@ -30,7 +29,7 @@ def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, c
         "vault_id": vault_id,
         "key_enc": key_enc,
         "signature": signature,
-        "content": content,
+        "metadata": metadata,
         "items": items,
     }
 
@@ -49,4 +48,37 @@ def delete_vault(username_hash: str, vault_id: str) -> bool:
         return False
 
     _save_user_vaults(username_hash, filtered)
+    return True
+
+def add_item(username_hash: str, vault_id: str, item: dict) -> bool:
+    """
+    Ajoute un item chiffré dans le vault donné de l'utilisateur.
+    """
+    vaults = get_user_vaults(username_hash)
+
+    # Récupère le vault cible dans lequel add l'item
+    target = None
+    for v in vaults:
+        if v.get("vault_id") == vault_id:
+            target = v
+            break
+    if target is None:
+        raise ValueError("vault not found")
+
+    # Prend les items déjà présent
+    items = target.get("items")
+    if items is None:
+        items = []
+        target["items"] = items
+
+    item_id = item.get("item_id")
+    if not item_id:
+        raise ValueError("missing item_id")
+
+    if any(i.get("item_id") == item_id for i in items):
+        raise ValueError("item_id already exists")
+
+    # Ajoute le nouvel item aux items présent et save le vault
+    items.append(item)
+    _save_user_vaults(username_hash, vaults)
     return True

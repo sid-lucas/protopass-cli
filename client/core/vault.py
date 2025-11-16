@@ -1,10 +1,10 @@
 import base64, uuid, os, json
 from datetime import datetime, timezone
 from .account_state import AccountState
-from ..utils.display import render_table, format_timestamp
-from ..utils.network import api_post, handle_resp
 from ..utils import logger as log
 from ..utils.logger import CTX, notify_user
+from ..utils.network import api_post, handle_resp
+from ..utils.display import render_table, format_timestamp, prompt_field
 from ..utils.crypto import (
     encrypt_gcm,
     decrypt_gcm,
@@ -14,22 +14,6 @@ from ..utils.crypto import (
     b64_block_from_bytes,
     bytes_from_b64_block,
 )
-
-def _prompt_field(label, max_len, allow_empty=False):
-    logger = log.get_logger(CTX.VAULT_CREATE, AccountState.username())
-    while True:
-        value = input(f"{label} (max {max_len} chars): ").strip()
-        if not value and allow_empty:
-            return None
-        if not value:
-            logger.warning(f"Empty value provided for '{label}'")
-            notify_user("This field cannot be empty.")
-            continue
-        if len(value) > max_len:
-            logger.warning(f"Value for '{label}' exceeds {max_len} characters")
-            notify_user(f"Value must be ≤ {max_len} characters.")
-            continue
-        return value
 
 def _fetch_vault_rows():
     """
@@ -79,15 +63,15 @@ def _fetch_vault_rows():
             # met la clé de ce vault en cache RAM
             AccountState.set_vault_key(vault_id, vault_key)
 
-            content_blob = vault.get("content")
-            if not content_blob:
-                raise ValueError("missing content blob")
-            enc, nonce, tag = bytes_from_b64_block(content_blob)
+            metadata_blob = vault.get("metadata")
+            if not metadata_blob:
+                raise ValueError("missing metadata blob")
+            enc, nonce, tag = bytes_from_b64_block(metadata_blob)
             plaintext = decrypt_gcm(vault_key, enc, nonce, tag).decode()
-            content = json.loads(plaintext)
-            vault_name = content.get("name")
-            description = content.get("description")
-            created_at = content.get("created_at")
+            metadata = json.loads(plaintext)
+            vault_name = metadata.get("name")
+            description = metadata.get("description")
+            created_at = metadata.get("created_at")
             created_display = format_timestamp(created_at) if created_at else "-"
 
         except Exception as e:
@@ -248,8 +232,8 @@ def create_vault(_args):
     
     logger = log.get_logger(CTX.VAULT_CREATE, current_user)
 
-    vault_name = _prompt_field("Vault name", 15)
-    description = _prompt_field("Description", 40, allow_empty=True)
+    vault_name = prompt_field("Vault name", 15)
+    description = prompt_field("Description", 40, allow_empty=True)
     created_at = datetime.now(timezone.utc).isoformat()
 
     # Génère un UUID unique pour le vault
@@ -264,14 +248,14 @@ def create_vault(_args):
     vault_key_enc = wrap_vault_key(public_key, vault_key)
 
     # chiffrement des métadonnées du vault avec la vault_key
-    vault_plain = {
+    metadata_plain = {
         "name": vault_name,
         "description": description,
         "created_at": created_at,
     }
-    vault_plaintext = json.dumps(vault_plain)
-    ciphertext, nonce, tag = encrypt_gcm(vault_key, vault_plaintext.encode())
-    content_blob = b64_block_from_bytes(ciphertext, nonce, tag)
+    metadata_plaintext = json.dumps(metadata_plain)
+    ciphertext, nonce, tag = encrypt_gcm(vault_key, metadata_plaintext.encode())
+    metadata_blob = b64_block_from_bytes(ciphertext, nonce, tag)
 
     # Pas d'items créés pour l'instant
 
@@ -285,7 +269,7 @@ def create_vault(_args):
         "vault_id": vault_id,
         "key_enc": base64.b64encode(vault_key_enc).decode(),
         "signature": base64.b64encode(vault_signature).decode(),
-        "content": content_blob,
+        "metadata": metadata_blob,
         "items": []
     }
     resp = api_post("/vault/create", payload, user=current_user)
