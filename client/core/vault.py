@@ -166,9 +166,11 @@ def delete_vault(args):
         notify_user("Vault deletion failed. See logs for details.")
         return
     
-    #
-    # TODO SI ON SUPPRIME LE VAULT SELECTIONNE
-    # TODO  VERIFIER SI ON DOIT PAS CLEAR ACCOUNT STATE DU VAULT SELECTED (et vault_keys)!!
+    # Nettoie l'état local si on supprime le vault actuellement sélectionné
+    current_selected = AccountState.current_vault()
+    if current_selected == vault_id_to_del:
+        AccountState.clear_current_vault()
+    AccountState.remove_vault_key(vault_id_to_del)
 
     notify_user(f"Vault deleted successfully.")
 

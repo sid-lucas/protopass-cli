@@ -467,6 +467,13 @@ class AccountState:
                 for idx in range(len(value)):
                     value[idx] = 0
         cls._vault_keys.clear()
+    
+    @classmethod
+    def remove_vault_key(cls, vault_id: str):
+        key = cls._vault_keys.pop(vault_id, None)
+        if isinstance(key, bytearray):
+            for idx in range(len(key)):
+                key[idx] = 0
 
     @classmethod
     def set_current_vault(cls, vault_id: str):
