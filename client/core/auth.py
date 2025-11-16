@@ -2,10 +2,10 @@ import getpass, base64, srp, re
 from Crypto.Hash import SHA256
 from .account_state import AccountState
 from ..utils import logger as log
-from ..utils.network import api_post, handle_resp
 from ..utils.agent_client import AgentClient
-from ..utils.logger import notify_user
 from ..utils.logger import CTX
+from ..utils.logger import notify_user
+from ..utils.network import api_post, handle_resp
 from ..utils.crypto import (
     generate_userkey_pair,
 )

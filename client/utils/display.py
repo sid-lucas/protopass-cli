@@ -1,8 +1,8 @@
 import textwrap
 from datetime import datetime
 from typing import Iterable, Mapping, Sequence
-from utils import logger as log
-from utils.logger import CTX, notify_user
+from . import logger as log
+from .logger import CTX, notify_user
 from ..core.account_state import AccountState
 
 
