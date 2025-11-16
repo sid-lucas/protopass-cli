@@ -1,4 +1,4 @@
-import base64, json, os
+import base64, json, os, time
 from pathlib import Path
 from Crypto.Hash import SHA256
 from ..utils import logger as log
@@ -28,6 +28,7 @@ Structure de account_state.json :
 """
 
 MAX_UNLOCK_ATTEMPTS = 3
+SESSION_VALIDITY_TTL = 2  # secondes pendant lesquelles on réutilise une vérification positive
 
 class AccountState:
     """
@@ -42,6 +43,8 @@ class AccountState:
     _private_key = None  # Pour des questions de sécurité
     _vault_keys = {}  # Cache mémoire des clés de vault déchiffrées
     _current_vault_id = None
+    _last_session_valid = None
+    _last_session_check = 0.0
 
 
     PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
@@ -130,7 +133,19 @@ class AccountState:
         except Exception as exc:
             cls._cached_public_key = None
             logger.warning(f"Unable to cache public key: {exc}")
+        cls._reset_session_cache()
         return True
+
+    @classmethod
+    def _reset_session_cache(cls):
+        cls._last_session_valid = None
+        cls._last_session_check = 0.0
+
+    @classmethod
+    def _remember_session_status(cls, status: bool):
+        cls._last_session_valid = status
+        cls._last_session_check = time.monotonic()
+        return status
 
     @classmethod
     def clear(cls):
@@ -141,6 +156,7 @@ class AccountState:
         cls._cached_session_id = None # Ne nettoie pas les bytes en mémoire comme la clé privée... cela peut être une amélioration
         cls.clear_private_key()
         cls.clear_vault_keys()
+        cls._reset_session_cache()
 
     # ============================================================
     # Gestion de session et récupération des infos utilisateur
@@ -148,17 +164,22 @@ class AccountState:
     @classmethod
     def valid(cls):
         """Vérifie si la session locale existe et est encore valide côté serveur."""
+        if cls._last_session_valid is not None:
+            elapsed = time.monotonic() - cls._last_session_check
+            if elapsed < SESSION_VALIDITY_TTL:
+                return cls._last_session_valid
+
         current_user = cls.username()
         logger = log.get_logger(CTX.SESSION_VERIFY, current_user)
         sid = cls.session_id()
         if not sid:
             logger.debug("No local session ID available. Session is considered invalid")
-            return False
+            return cls._remember_session_status(False)
 
         session_payload = cls.session_payload()
         if session_payload is None:
             logger.debug("Unable to build session payload. Session is considered invalid")
-            return False
+            return cls._remember_session_status(False)
 
         # Vérifie auprès du serveur
         data = handle_resp(
@@ -171,7 +192,7 @@ class AccountState:
             logger.warning(f"Local session '{sid[:8]}' invalid according to server, clearing local data")
             notify_user("Session invalid or expired. Please log in again.")
             cls.clear()
-            return False
+            return cls._remember_session_status(False)
 
         server_username_hash = data.get("username")
         expected_hash = session_payload.get("username_hash")
@@ -179,9 +200,9 @@ class AccountState:
             logger.error("Session username mismatch detected; clearing local data")
             notify_user("Local session data is inconsistent. Please log in again.")
             cls.clear()
-            return False
+            return cls._remember_session_status(False)
 
-        return True
+        return cls._remember_session_status(True)
 
     @classmethod
     def username(cls):
@@ -431,4 +452,3 @@ class AccountState:
     @classmethod
     def current_vault(cls):
         return cls._current_vault_id
-

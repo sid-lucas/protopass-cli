@@ -11,7 +11,7 @@ class ShellArgumentParser(argparse.ArgumentParser):
 
 SESSION_OPTIONAL_COMMANDS = {"login", "logout", "register", "shell"}
 
-def dispatch_command(args):
+def dispatch_command(args, session_valid=None):
     """
     Point d'entrée commun pour exécuter une commande en tenant compte des règles de session.
     """
@@ -19,9 +19,13 @@ def dispatch_command(args):
         print("Invalid command. Type 'help' for a list of commands.")
         return
 
-    if args.command not in SESSION_OPTIONAL_COMMANDS and not auth.AccountState.valid():
-        print("You must be logged in to use this command.")
-        return
+    if args.command not in SESSION_OPTIONAL_COMMANDS:
+        is_valid = session_valid
+        if is_valid is None:
+            is_valid = auth.AccountState.valid()
+        if not is_valid:
+            print("You must be logged in to use this command.")
+            return
 
     try:
         args.func(args)
@@ -178,7 +182,7 @@ def start_shell(_args=None):
             except SystemExit:
                 continue
 
-            dispatch_command(args)
+            dispatch_command(args, session_verified)
             session_verified = None  # force refreshing prompt next iteration
 
         except KeyboardInterrupt:
