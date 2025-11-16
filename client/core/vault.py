@@ -104,12 +104,15 @@ def _fetch_vault_rows():
 
     return rows
 
-def _get_vault_uuid_by_index(index: int, logger):
+def _get_vault_uuid_by_index(index: int, rows=None, logger=None):
     """
     Retourne l'UUID du vault correspondant à l'index affiché dans vault list,
     ou None si introuvable ou si aucune ligne.
+
+    rows: liste pré-calculée issue de _fetch_vault_rows pour éviter les requêtes doublons.
     """
-    rows = _fetch_vault_rows()
+    if rows is None:
+        rows = _fetch_vault_rows()
     failed = False
 
     if not rows:
@@ -122,7 +125,8 @@ def _get_vault_uuid_by_index(index: int, logger):
 
 
     notify_user(f"No vault found for index '{index}'")
-    logger.error(f"No vault associated with index '{index}', deletion aborted")
+    if logger:
+        logger.error(f"No vault associated with index '{index}', deletion aborted")
     return None
 
 
@@ -136,7 +140,7 @@ def delete_vault(args):
         return
     
     # Trouver le vault via l'index
-    vault_id_to_del = _get_vault_uuid_by_index(args.index, logger)
+    vault_id_to_del = _get_vault_uuid_by_index(args.index, rows, logger)
     if vault_id_to_del is None:
         return
 
@@ -178,7 +182,7 @@ def select_vault(args):
         return
 
     # Retrouve l'UUID à partir de l'index
-    vault_id = _get_vault_uuid_by_index(args.index, logger)
+    vault_id = _get_vault_uuid_by_index(args.index, rows, logger)
     if vault_id is None:
         return
 
