@@ -42,8 +42,13 @@ class AccountState:
     _cached_public_key = None  # idem
     _private_key = None  # Pour des questions de sécurité
     _vault_keys = {}  # Cache mémoire des clés de vault déchiffrées
+
+    # Cache de l'id de vault sélectionné, et flag si l'id a besoin d'être loadé du disk (pour CLI)
     _current_vault_id = None
     _current_vault_loaded = False
+
+    # Flag avec TTL indiquant si la session est valide afin d'éviter
+    # des répétition de "Session verify" auprès du serveur lors d'une commande
     _last_session_valid = None
     _last_session_check = 0.0
 
