@@ -234,9 +234,17 @@ def create_vault(_args):
 
     vault_name = prompt_field("Vault name", 15, False, logger)
     description = prompt_field("Description", 40, True, logger)
-    created_at = datetime.now(timezone.utc).isoformat()
 
-    # Génère un UUID unique pour le vault
+    # Création du JSON
+    now = datetime.now(timezone.utc).isoformat()
+    metadata_plain = {
+        "name": vault_name,
+        "description": description,
+        "created_at": now,
+    }
+    metadata_plaintext = json.dumps(metadata_plain)
+
+    # Génère un UUID pour le vault
     vault_id = str(uuid.uuid4())
     # Génère une clé symétrique de 256bits pour le vault
     vault_key = os.urandom(32)
@@ -248,12 +256,6 @@ def create_vault(_args):
     vault_key_enc = wrap_vault_key(public_key, vault_key)
 
     # chiffrement des métadonnées du vault avec la vault_key
-    metadata_plain = {
-        "name": vault_name,
-        "description": description,
-        "created_at": created_at,
-    }
-    metadata_plaintext = json.dumps(metadata_plain)
     ciphertext, nonce, tag = encrypt_gcm(vault_key, metadata_plaintext.encode())
     metadata_blob = b64_block_from_bytes(ciphertext, nonce, tag)
 
