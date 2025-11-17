@@ -149,26 +149,19 @@ def show_item(args):
         notify_user("Item not found on server.")
         return
 
-    # 1) Déchiffre item_key via vault_key
+    # Déchiffre item_key et le contenu
     try:
-        key_enc, key_nonce, key_tag = bytes_from_b64_block(raw_item["key"])
-        item_key = decrypt_gcm(vault_key, key_enc, key_nonce, key_tag)
+        item_key = decrypt_b64_block(vault_key, raw_item["key"])
+        plaintext = decrypt_b64_block(item_key, raw_item["content"])
     except Exception as e:
-        logger.error(f"Failed to decrypt item key: {e}")
-        notify_user("Unable to decrypt item key.")
+        logger.error(f"Failed to decrypt: {e}")
+        notify_user("An error occured. Check the logs for more details.")
         return
-
-    # 2) Déchiffre le contenu via item_key
-    try:
-        enc, nonce, tag = bytes_from_b64_block(raw_item["content"])
-        plaintext = decrypt_gcm(item_key, enc, nonce, tag).decode()
-        data = json.loads(plaintext)
-    except Exception as e:
-        logger.error(f"Failed to decrypt item content: {e}")
-        notify_user("Unable to decrypt item content.")
-        return
+    
+    data = json.loads(plaintext)
 
     # Affichage simple du JSON déchiffré
+    # TODO display.py affichage propre :
     print("\n=== Item details ===")
     for k, v in data.items():
         print(f"{k}: {v}")
