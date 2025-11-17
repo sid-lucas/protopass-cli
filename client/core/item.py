@@ -21,13 +21,11 @@ def _fetch_item_rows():
     Retourne une liste de dicts prêts pour un rendu tabulaire.
     """
     # récupération du contexte utilisateur actuel
-    current_user = AccountState.username()
-    logger = log.get_logger(CTX.ITEM_LIST, current_user)
     session_payload = AccountState.session_payload()
     if session_payload is None:
-        logger.error("No valid session payload.")
-        notify_user("No active session. Please log in.")
         return None
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.ITEM_LIST, current_user)
 
     # Vérifie le vault sélectionner et récupère la clé
     vault_id = AccountState.current_vault()
@@ -103,7 +101,79 @@ def list_items(_args):
     print(render_table(rows, columns))
 
 def show_item(args):
-    return
+    # récupération du contexte utilisateur actuel
+    session_payload = AccountState.session_payload()
+    if session_payload is None:
+        return
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.ITEM_SHOW, current_user)
+
+    # Récupère les lignes (idx, title, type, uuid, ...)
+    rows = _fetch_item_rows()
+    if not rows:
+        return
+
+    # Retrouve l'id de l'item à partir de l'index
+    item_id = get_id_by_index(args.index, rows, logger=logger)
+    if item_id is None:
+        return
+
+    # Récupère le vault courant
+    vault_id = AccountState.current_vault()
+    if not vault_id:
+        notify_user("No vault selected. Use: vault select <index>.")
+        return
+
+    vault_key = AccountState.vault_key(vault_id)
+    if vault_key is None:
+        logger.error("No vault key in memory for current vault.")
+        notify_user("Vault key not found. Try to select the vault again.")
+        return
+
+    # Récupère tous les vaults puis celui qui nous intéresse
+    vaults = fetch_vaults(session_payload, current_user, CTX.ITEM_SHOW)
+    if vaults is None:
+        notify_user("Unable to retrieve vaults for item show.")
+        return
+
+    target_vault = find_vault_by_id(vaults, vault_id)
+    if target_vault is None:
+        logger.error(f"Current vault '{vault_id}' not found on server.")
+        notify_user("Selected vault not found on server.")
+        return
+
+    # Retrouve l'item brut dans ce vault
+    raw_items = target_vault.get("items", [])
+    raw_item = next((it for it in raw_items if it.get("item_id") == item_id), None)
+    if raw_item is None:
+        notify_user("Item not found on server.")
+        return
+
+    # 1) Déchiffre item_key via vault_key
+    try:
+        key_enc, key_nonce, key_tag = bytes_from_b64_block(raw_item["key"])
+        item_key = decrypt_gcm(vault_key, key_enc, key_nonce, key_tag)
+    except Exception as e:
+        logger.error(f"Failed to decrypt item key: {e}")
+        notify_user("Unable to decrypt item key.")
+        return
+
+    # 2) Déchiffre le contenu via item_key
+    try:
+        enc, nonce, tag = bytes_from_b64_block(raw_item["content"])
+        plaintext = decrypt_gcm(item_key, enc, nonce, tag).decode()
+        data = json.loads(plaintext)
+    except Exception as e:
+        logger.error(f"Failed to decrypt item content: {e}")
+        notify_user("Unable to decrypt item content.")
+        return
+
+    # Affichage simple du JSON déchiffré
+    print("\n=== Item details ===")
+    for k, v in data.items():
+        print(f"{k}: {v}")
+    print("")
+
 
 
 def create_item(_args):

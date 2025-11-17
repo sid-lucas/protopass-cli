@@ -23,6 +23,8 @@ class LogContext(str, Enum):
     ITEM_CREATE = "Item Create"
     ITEM_DELETE = "Item Delete"
     ITEM_SELECT = "Item Select"
+    ITEM_SHOW = "Item show"
+    
 
 
 CTX = LogContext

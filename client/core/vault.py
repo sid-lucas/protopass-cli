@@ -22,13 +22,11 @@ def _fetch_vault_rows():
     et retourne une liste de lignes prêtes pour l'affichage dans vault list
     """
     # récupération du contexte utilisateur actuel
-    current_user = AccountState.username()
-    logger = log.get_logger(CTX.VAULT_LIST, current_user)
     session_payload = AccountState.session_payload()
     if session_payload is None:
-        logger.error("No active session found in account state.")
-        notify_user("No active session. Please log in.")
         return None
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.VAULT_LIST, current_user)
     
     # Récupère tous les vaults
     vaults = fetch_vaults(session_payload, current_user, CTX.VAULT_LIST)
@@ -80,9 +78,13 @@ def _fetch_vault_rows():
     return rows
 
 def delete_vault(args):
+    # récupération du contexte utilisateur actuel
+    session_payload = AccountState.session_payload()
+    if session_payload is None:
+        return
     current_user = AccountState.username()
-    logger = log.get_logger(CTX.VAULT_DELETE, AccountState.username())
-
+    logger = log.get_logger(CTX.VAULT_DELETE, current_user)
+    
     rows = _fetch_vault_rows()
     if not rows:
         return
@@ -94,10 +96,6 @@ def delete_vault(args):
 
     notify_user(f"found vault id to del : {vault_id_to_del}")
 
-    session_payload = AccountState.session_payload()
-    if session_payload is None:
-        logger.error("No valid session found in account state.")
-        return
     # Envoie les informations du nouveau vault au serveur
     payload = {
         **session_payload,
@@ -183,7 +181,13 @@ def list_vaults(_args):
     print(render_table(rows, columns))
 
 def create_vault(_args):
+    # récupération du contexte utilisateur actuel
+    session_payload = AccountState.session_payload()
+    if session_payload is None:
+        return
     current_user = AccountState.username()
+    logger = log.get_logger(CTX.VAULT_CREATE, current_user)
+    
     public_key = AccountState.public_key()
     private_key = AccountState.private_key()
     if current_user is None or public_key is None or private_key is None:
@@ -192,8 +196,6 @@ def create_vault(_args):
             "Run 'logout' then 'login' to regenerate your keys."
         )
         return
-    
-    logger = log.get_logger(CTX.VAULT_CREATE, current_user)
 
     vault_name = prompt_field("Vault name", 15, False, logger)
     description = prompt_field("Description", 40, True, logger)
@@ -221,12 +223,10 @@ def create_vault(_args):
     # chiffrement des métadonnées du vault avec la vault_key
     metadata_blob = encrypt_b64_block(vault_key, metadata_plaintext.encode())
 
+    #
     # Pas d'items créés pour l'instant
-
-    session_payload = AccountState.session_payload()
-    if session_payload is None:
-        logger.error("No valid session found in account state.")
-        return
+    #
+    
     # Envoie les informations du nouveau vault au serveur
     payload = {
         **session_payload,
