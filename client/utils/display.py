@@ -49,7 +49,7 @@ def render_table(rows: Iterable[Mapping[str, str]], columns: Sequence[tuple[str,
         lines.append("  ".join(parts))
 
     lines.append("")
-    lines.append(f"Total: {len(materialized_rows)} vault(s)")
+    lines.append(f"Total: {len(materialized_rows)}")
 
     return "\n" + "\n".join(lines)
 

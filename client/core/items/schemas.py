@@ -1,28 +1,28 @@
 from enum import Enum
 
 class Type(str, Enum):
-    LOGIN = "login"
-    ALIAS = "alias"
-    CARD = "card"
-    NOTE = "note"
-    IDENTITY = "identity"
-    OTHER = "other"
+    LOGIN = "Login"
+    ALIAS = "Alias"
+    CARD = "Card"
+    NOTE = "Note"
+    IDENTITY = "Identity"
+    OTHER = "Other"
 
 class Field(str, Enum):
-    TITLE = "title"
-    USERNAME = "username"
-    PASSWORD = "password"
-    URL = "url"
-    BODY = "body"
-    EMAIL = "email"
-    NOTES = "notes"
-    CARD_NUMBER = "card_number"
-    EXPIRY = "expiry"
-    HOLDER = "holder"
-    CVV = "cvv"
-    FIRSTNAME = "firstname"
-    LASTNAME = "lastname"
-    PHONE = "phone"
+    TITLE = "Title"
+    USERNAME = "Username"
+    PASSWORD = "Password"
+    URL = "URL"
+    BODY = "Body"
+    EMAIL = "Email"
+    NOTES = "Notes"
+    CARD_NUMBER = "Card number"
+    EXPIRY = "Expiry"
+    HOLDER = "Holder"
+    CVV = "CVV"
+    FIRSTNAME = "Firstname"
+    LASTNAME = "Lastname"
+    PHONE = "Phone"
 
 FIELD_MAXLEN = {
     Field.TITLE: 30,

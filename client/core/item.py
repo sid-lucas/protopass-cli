@@ -80,8 +80,8 @@ def _fetch_item_rows():
             plaintext = decrypt_gcm(item_key, enc, nonce, tag).decode()
 
             data = json.loads(plaintext)
-            title = data.get("title")
-            item_type = data.get("type")
+            type = (data.get("type") or "-").upper()
+            title = data.get("title") or "-"
             created_at = data.get("created_at")
             created_display = format_timestamp(created_at) if created_at else "-"
             updated_at = data.get("updated_at")
@@ -93,8 +93,8 @@ def _fetch_item_rows():
     
         rows.append({
             "idx": str(idx),
-            "type": item_type or "-",
-            "title": title or "-",
+            "type": type,
+            "title": title,
             "created": created_display,
             "updated": updated_display,
             "uuid": item.get("item_id"),
@@ -115,7 +115,7 @@ def list_items(_args):
         ("idx", "#", 3),
         ("type", "Type", 8),
         ("title", "Name", FIELD_MAXLEN[Field.TITLE]),
-        ("updated", "Updated", 17),
+        ("updated", "Last modified", 17),
         ("created", "Created", 17),
     ]
     print(render_table(rows, columns))
