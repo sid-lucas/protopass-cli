@@ -2,6 +2,7 @@ import base64, uuid, os, json
 from datetime import datetime, timezone
 from .account_state import AccountState
 from ..utils import logger as log
+from ..utils.common import get_id_by_index
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
 from ..utils.display import render_table, format_timestamp, prompt_field
@@ -89,33 +90,6 @@ def _fetch_vault_rows():
 
     return rows
 
-def _get_vault_uuid_by_index(index: int, rows=None, logger=None):
-    """
-    Retourne l'UUID du vault correspondant à l'index affiché dans vault list,
-    ou None si introuvable ou si aucune ligne.
-
-    rows: liste pré-calculée issue de _fetch_vault_rows pour éviter les requêtes doublons.
-    """
-    if rows is None:
-        rows = _fetch_vault_rows()
-    failed = False
-
-    if not rows:
-        failed = True
-
-    if not failed :
-        for row in rows:
-            if row.get("idx") == str(index):
-                return row.get("uuid")
-
-
-    notify_user(f"No vault found for index {index}.")
-    if logger:
-        logger.error(f"No vault associated with index '{index}'")
-    return None
-
-
-
 def delete_vault(args):
     current_user = AccountState.username()
     logger = log.get_logger(CTX.VAULT_DELETE, AccountState.username())
@@ -125,7 +99,7 @@ def delete_vault(args):
         return
     
     # Trouver le vault via l'index
-    vault_id_to_del = _get_vault_uuid_by_index(args.index, rows, logger)
+    vault_id_to_del = get_id_by_index(args.index, rows, logger)
     if vault_id_to_del is None:
         return
 
@@ -169,7 +143,7 @@ def select_vault(args):
         return
 
     # Retrouve l'UUID à partir de l'index
-    vault_id = _get_vault_uuid_by_index(args.index, rows, logger)
+    vault_id = get_id_by_index(args.index, rows, logger)
     if vault_id is None:
         return
 

@@ -4,6 +4,7 @@ from .items.schemas import Type, Field, SCHEMAS, FIELD_MAXLEN
 from .items.prompt import prompt_fields_for_type
 from .account_state import AccountState
 from ..utils import logger as log
+from ..utils.common import get_id_by_index
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
 from ..utils.display import render_table, format_timestamp
@@ -119,6 +120,9 @@ def list_items(_args):
         ("created", "Created", 17),
     ]
     print(render_table(rows, columns))
+
+def show_item(args):
+    return
 
 
 def create_item(_args):
