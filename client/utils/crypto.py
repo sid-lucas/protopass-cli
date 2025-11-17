@@ -31,6 +31,14 @@ def decrypt_gcm(key: bytes, ciphertext: bytes, nonce: bytes, tag: bytes) -> byte
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
     return cipher.decrypt_and_verify(ciphertext, tag)
 
+def encrypt_b64_block(key: bytes, plaintext: bytes):
+    ciphertext, nonce, tag = encrypt_gcm(key, plaintext)
+    return b64_block_from_bytes(ciphertext, nonce, tag)
+
+def decrypt_b64_block(key: bytes, block: dict):
+    enc, nonce, tag = b64_block_from_bytes(block)
+    return decrypt_gcm(key, enc, nonce, tag)
+
 def b64_block_from_bytes(ciphertext: bytes, nonce: bytes, tag: bytes):
     return {
         "enc": base64.b64encode(ciphertext).decode(),

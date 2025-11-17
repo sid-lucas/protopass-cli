@@ -7,8 +7,8 @@ from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
 from ..utils.display import render_table, format_timestamp, prompt_field
 from ..utils.crypto import (
-    encrypt_gcm,
-    decrypt_gcm,
+    encrypt_b64_block,
+    decrypt_b64_block,
     sign_vault_key,
     wrap_vault_key,
     unwrap_vault_key,
@@ -53,8 +53,7 @@ def _fetch_vault_rows():
             vault_key = unwrap_vault_key(private_key, vault_key_enc)
 
             # 2) déchiffrement des métadonnées
-            enc, nonce, tag = bytes_from_b64_block(vault.get("metadata"))
-            plaintext = decrypt_gcm(vault_key, enc, nonce, tag).decode()
+            plaintext = decrypt_b64_block(vault_key, vault.get("metadata"))
 
             # met la clé de ce vault en cache RAM
             AccountState.set_vault_key(vault_id, vault_key)
@@ -220,8 +219,7 @@ def create_vault(_args):
     vault_key_enc = wrap_vault_key(public_key, vault_key)
 
     # chiffrement des métadonnées du vault avec la vault_key
-    ciphertext, nonce, tag = encrypt_gcm(vault_key, metadata_plaintext.encode())
-    metadata_blob = b64_block_from_bytes(ciphertext, nonce, tag)
+    metadata_blob = encrypt_b64_block(vault_key, metadata_plaintext.encode())
 
     # Pas d'items créés pour l'instant
 

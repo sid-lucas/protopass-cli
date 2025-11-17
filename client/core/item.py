@@ -9,8 +9,8 @@ from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
 from ..utils.display import render_table, format_timestamp
 from ..utils.crypto import (
-    encrypt_gcm,
-    decrypt_gcm,
+    encrypt_b64_block,
+    decrypt_b64_block,
     b64_block_from_bytes,
     bytes_from_b64_block,
 )
@@ -57,12 +57,9 @@ def _fetch_item_rows():
         item_id = item.get("item_id", "unknown")
         try:
             # 1) déchiffre item_key avec vault_key
-            key_enc, key_nonce, key_tag = bytes_from_b64_block(item["key"])
-            item_key = decrypt_gcm(vault_key, key_enc, key_nonce, key_tag)
-
+            item_key = decrypt_b64_block(vault_key, item["key"])
             # 2) déchiffre le contenu avec item_key
-            enc, nonce, tag = bytes_from_b64_block(item["content"])
-            plaintext = decrypt_gcm(item_key, enc, nonce, tag).decode()
+            plaintext = decrypt_b64_block(item_key, item["content"])
 
             data = json.loads(plaintext)
             type = (data.get("type") or "-").upper()
@@ -145,10 +142,9 @@ def create_item(_args):
     item_key = os.urandom(32)
 
     # Chiffrement du contenu avec item_key
-    enc, nonce, tag = encrypt_gcm(item_key, plaintext_json)
+    key_block = encrypt_b64_block(vault_key, item_key)
     # Chiffrement de item_key avec vault_key
-    key_enc, key_nonce, key_tag = encrypt_gcm(vault_key, item_key)
-
+    content_block = encrypt_b64_block(item_key, plaintext_json)
 
     # Construction du payload pour envoi au serveur
     payload = {
@@ -156,16 +152,8 @@ def create_item(_args):
         "vault_id": vault_id,
         "item": {
             "item_id": item_id,
-            "key": {
-                "enc": base64.b64encode(key_enc).decode(),
-                "nonce": base64.b64encode(key_nonce).decode(),
-                "tag": base64.b64encode(key_tag).decode()
-            },
-            "content": {
-                "enc": base64.b64encode(enc).decode(),
-                "nonce": base64.b64encode(nonce).decode(),
-                "tag": base64.b64encode(tag).decode()
-            }
+            "key": key_block,
+            "content": content_block
         }
     }
     resp = api_post("/item/create", payload)
