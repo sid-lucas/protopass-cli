@@ -2,7 +2,7 @@ import base64, uuid, os, json
 from datetime import datetime, timezone
 from .account_state import AccountState
 from ..utils import logger as log
-from ..utils.common import get_id_by_index
+from ..utils.common import get_id_by_index, fetch_vaults
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
 from ..utils.display import render_table, format_timestamp, prompt_field
@@ -31,17 +31,7 @@ def _fetch_vault_rows():
         return None
     
     # Récupère tous les vaults
-    resp = api_post("/vault/list", session_payload, user=current_user)
-    data = handle_resp(
-        resp,
-        required_fields=["vaults"],
-        context=CTX.VAULT_LIST,
-        user=current_user
-    )
-    if data is None:
-        notify_user("Unable to retrieve vault list. See logs for details.")
-        return None
-    vaults = data["vaults"]
+    vaults = fetch_vaults(session_payload, current_user, CTX.VAULT_LIST)
     if len(vaults) == 0:
         notify_user("No vaults found.")
         return None

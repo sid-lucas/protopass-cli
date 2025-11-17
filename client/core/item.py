@@ -4,7 +4,7 @@ from .items.schemas import Type, Field, SCHEMAS, FIELD_MAXLEN
 from .items.prompt import prompt_fields_for_type
 from .account_state import AccountState
 from ..utils import logger as log
-from ..utils.common import get_id_by_index
+from ..utils.common import get_id_by_index, fetch_vaults, find_vault_by_id
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
 from ..utils.display import render_table, format_timestamp
@@ -41,25 +41,9 @@ def _fetch_item_rows():
         return None
 
     # Récupère tous les vaults et trouve celui qui nous intéresse
-    # TODO Surement moyen de factoriser avec comment fonctionne 'fetch vault' dans vault.py
-    resp = api_post("/vault/list", session_payload, user=current_user)
-    data = handle_resp(
-        resp,
-        required_fields=["vaults"],
-        context=CTX.ITEM_LIST,
-        user=current_user
-    )
-    if data is None:
-        notify_user("Unable to retrieve vaults for item listing.")
-        return None
-    target_vault = None
-    for v in data["vaults"]:
-        if v.get("vault_id") == vault_id:
-            target_vault = v
-            break
+    vaults = fetch_vaults(session_payload, current_user, CTX.ITEM_LIST)
+    target_vault = find_vault_by_id(vaults, vault_id)
     if target_vault is None:
-        logger.error(f"Current vault '{vault_id}' not found on server.")
-        notify_user("Selected vault not found on server.")
         return None
 
     # Récupère les items du vault sélectionné
