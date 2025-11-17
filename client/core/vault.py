@@ -28,7 +28,8 @@ def _fetch_vault_rows():
         logger.error("No active session found in account state.")
         notify_user("No active session. Please log in.")
         return None
-    # requête API pour récupérer les vaults distants
+    
+    # Récupère tous les vaults
     resp = api_post("/vault/list", session_payload, user=current_user)
     data = handle_resp(
         resp,
@@ -53,21 +54,20 @@ def _fetch_vault_rows():
     
     # boucle sur chaque coffre pour construire les lignes d'affichage
     rows = []
-    for vault in vaults:
+    for idx, vault in enumerate(vaults, start=1):
         vault_id = vault.get("vault_id", "unknown")
         try:
-            # Déchiffrement des métadonnées
+            # 1) déchiffre la vault_key avec la private_key
             vault_key_enc = base64.b64decode(vault["key_enc"])
             vault_key = unwrap_vault_key(private_key, vault_key_enc)
+
+            # 2) déchiffrement des métadonnées
+            enc, nonce, tag = bytes_from_b64_block(vault.get("metadata"))
+            plaintext = decrypt_gcm(vault_key, enc, nonce, tag).decode()
 
             # met la clé de ce vault en cache RAM
             AccountState.set_vault_key(vault_id, vault_key)
 
-            metadata_blob = vault.get("metadata")
-            if not metadata_blob:
-                raise ValueError("missing metadata blob")
-            enc, nonce, tag = bytes_from_b64_block(metadata_blob)
-            plaintext = decrypt_gcm(vault_key, enc, nonce, tag).decode()
             metadata = json.loads(plaintext)
             vault_name = metadata.get("name")
             description = metadata.get("description")
@@ -75,12 +75,12 @@ def _fetch_vault_rows():
             created_display = format_timestamp(created_at) if created_at else "-"
 
         except Exception as e:
-            logger.warning(f"Failed to decrypt vault '{vault_id[:8]}' ({e})")
+            logger.warning(f"Failed to decrypt vault '{vault_id[:8]}': {e}")
             continue
 
         # ajoute le nouveau vault lu dans une ligne
         rows.append({
-            "idx": str(len(rows) + 1),
+            "idx": str(idx),
             "name": vault_name or "-",
             "desc": description or "-",
             "created": created_display,

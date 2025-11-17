@@ -1,12 +1,125 @@
 import uuid, json, os, base64
 from datetime import datetime, timezone
-from .items.schemas import Type
+from .items.schemas import Type, Field, SCHEMAS, FIELD_MAXLEN
 from .items.prompt import prompt_fields_for_type
 from .account_state import AccountState
 from ..utils import logger as log
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
-from ..utils.crypto import encrypt_gcm
+from ..utils.display import render_table, format_timestamp
+from ..utils.crypto import (
+    encrypt_gcm,
+    decrypt_gcm,
+    b64_block_from_bytes,
+    bytes_from_b64_block,
+)
+
+def _fetch_item_rows():
+    """
+    Récupère et déchiffre les items du vault courant.
+    Retourne une liste de dicts prêts pour un rendu tabulaire.
+    """
+    # récupération du contexte utilisateur actuel
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.ITEM_LIST, current_user)
+    session_payload = AccountState.session_payload()
+    if session_payload is None:
+        logger.error("No valid session payload.")
+        notify_user("No active session. Please log in.")
+        return None
+
+    # Vérifie le vault sélectionner et récupère la clé
+    vault_id = AccountState.current_vault()
+    if not vault_id:
+        notify_user("No vault selected. Use: vault select <index>.")
+        return None
+    vault_key = AccountState.vault_key(vault_id)
+    if vault_key is None:
+        logger.error("No vault key in memory for current vault.")
+        notify_user("Selected vault not found. Try to select the vault again.")
+        return None
+
+    # Récupère tous les vaults et trouve celui qui nous intéresse
+    # TODO Surement moyen de factoriser avec comment fonctionne 'fetch vault' dans vault.py
+    resp = api_post("/vault/list", session_payload, user=current_user)
+    data = handle_resp(
+        resp,
+        required_fields=["vaults"],
+        context=CTX.ITEM_LIST,
+        user=current_user
+    )
+    if data is None:
+        notify_user("Unable to retrieve vaults for item listing.")
+        return None
+    target_vault = None
+    for v in data["vaults"]:
+        if v.get("vault_id") == vault_id:
+            target_vault = v
+            break
+    if target_vault is None:
+        logger.error(f"Current vault '{vault_id}' not found on server.")
+        notify_user("Selected vault not found on server.")
+        return None
+
+    # Récupère les items du vault sélectionné
+    items = target_vault.get("items", [])
+    if not items:
+        notify_user("No items in this vault.")
+        return []
+    
+    rows = []
+    for idx, item in enumerate(items, start=1):
+        item_id = item.get("item_id", "unknown")
+        try:
+            # 1) déchiffre item_key avec vault_key
+            key_enc, key_nonce, key_tag = bytes_from_b64_block(item["key"])
+            item_key = decrypt_gcm(vault_key, key_enc, key_nonce, key_tag)
+
+            # 2) déchiffre le contenu avec item_key
+            enc, nonce, tag = bytes_from_b64_block(item["content"])
+            plaintext = decrypt_gcm(item_key, enc, nonce, tag).decode()
+
+            data = json.loads(plaintext)
+            title = data.get("title")
+            item_type = data.get("type")
+            created_at = data.get("created_at")
+            created_display = format_timestamp(created_at) if created_at else "-"
+            updated_at = data.get("updated_at")
+            updated_display = format_timestamp(updated_at) if updated_at else "-"
+
+        except Exception as e:
+            logger.warning(f"Failed to decrypt item '{item_id[:8]}': {e}")
+            continue
+    
+        rows.append({
+            "idx": str(idx),
+            "type": item_type or "-",
+            "title": title or "-",
+            "created": created_display,
+            "updated": updated_display,
+            "uuid": item.get("item_id"),
+        })
+
+    return rows
+
+def list_items(_args):
+    if not AccountState.valid():
+        print("Please login to list items.")
+        return
+
+    rows = _fetch_item_rows()
+    if not rows:
+        return
+
+    columns = [
+        ("idx", "#", 3),
+        ("type", "Type", 8),
+        ("title", "Name", FIELD_MAXLEN[Field.TITLE]),
+        ("updated", "Updated", 17),
+        ("created", "Created", 17),
+    ]
+    print(render_table(rows, columns))
+
 
 def create_item(_args):
     logger = log.get_logger(CTX.ITEM_CREATE, AccountState.username())

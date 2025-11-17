@@ -95,6 +95,9 @@ def build_parser():
     p_item_create = item_sub.add_parser("create", help="Create a new item in the selected vault")
     p_item_create.set_defaults(func=item.create_item)
 
+    p_item_list = item_sub.add_parser("list", help="List all items in the selected vault")
+    p_item_list.set_defaults(func=item.list_items)
+
 
     return parser
 
