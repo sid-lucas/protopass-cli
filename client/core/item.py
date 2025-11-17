@@ -22,7 +22,8 @@ def create_item(_args):
         notify_user("Vault key not found. Try to select a vault again.")
         return
 
-    item_title = prompt_field("Item name", 15)
+    item_title = prompt_field("Item name", 15, False, logger)
+
 
     # Construction de l'item (temporaire, modif plus tard)
     plaintext = {

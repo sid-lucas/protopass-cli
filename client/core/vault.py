@@ -232,8 +232,8 @@ def create_vault(_args):
     
     logger = log.get_logger(CTX.VAULT_CREATE, current_user)
 
-    vault_name = prompt_field("Vault name", 15)
-    description = prompt_field("Description", 40, allow_empty=True)
+    vault_name = prompt_field("Vault name", 15, False, logger)
+    description = prompt_field("Description", 40, True, logger)
     created_at = datetime.now(timezone.utc).isoformat()
 
     # Génère un UUID unique pour le vault

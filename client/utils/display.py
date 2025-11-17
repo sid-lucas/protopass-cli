@@ -54,10 +54,12 @@ def render_table(rows: Iterable[Mapping[str, str]], columns: Sequence[tuple[str,
     return "\n" + "\n".join(lines)
 
 
-def prompt_field(label, max_len, allow_empty=False):
-    logger = log.get_logger(CTX.VAULT_CREATE, AccountState.username())
+def prompt_field(label, max_len, allow_empty, logger):
+    suffix = " (optional)" if allow_empty else ""
+    prompt = f"{label}{suffix}: "
+
     while True:
-        value = input(f"{label} (max {max_len} chars): ").strip()
+        value = input(prompt).strip()
         if not value and allow_empty:
             return None
         if not value:
@@ -66,6 +68,6 @@ def prompt_field(label, max_len, allow_empty=False):
             continue
         if len(value) > max_len:
             logger.warning(f"Value for '{label}' exceeds {max_len} characters")
-            notify_user(f"Value must be ≤ {max_len} characters.")
+            notify_user(f"Can't exceed {max_len} chars.")
             continue
         return value
