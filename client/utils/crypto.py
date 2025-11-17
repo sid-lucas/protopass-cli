@@ -36,7 +36,7 @@ def encrypt_b64_block(key: bytes, plaintext: bytes):
     return b64_block_from_bytes(ciphertext, nonce, tag)
 
 def decrypt_b64_block(key: bytes, block: dict):
-    enc, nonce, tag = b64_block_from_bytes(block)
+    enc, nonce, tag = bytes_from_b64_block(block)
     return decrypt_gcm(key, enc, nonce, tag)
 
 def b64_block_from_bytes(ciphertext: bytes, nonce: bytes, tag: bytes):
@@ -74,4 +74,3 @@ def wrap_vault_key(public_key_der: bytes, vault_key: bytes) -> bytes:
 def unwrap_vault_key(private_key_der: bytes, vault_key_enc: bytes) -> bytes:
     cipher = PKCS1_OAEP.new(RSA.import_key(private_key_der))
     return cipher.decrypt(vault_key_enc)
-

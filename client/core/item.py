@@ -70,7 +70,7 @@ def _fetch_item_rows():
             updated_display = format_timestamp(updated_at) if updated_at else "-"
 
         except Exception as e:
-            logger.warning(f"Failed to decrypt item '{item_id[:8]}': {e}")
+            logger.error(f"Failed to decrypt item '{item_id[:8]}': {e}")
             continue
     
         rows.append({

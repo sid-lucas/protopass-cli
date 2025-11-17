@@ -65,7 +65,7 @@ def _fetch_vault_rows():
             created_display = format_timestamp(created_at) if created_at else "-"
 
         except Exception as e:
-            logger.warning(f"Failed to decrypt vault '{vault_id[:8]}': {e}")
+            logger.error(f"Failed to decrypt vault '{vault_id[:8]}': {e}")
             continue
 
         # ajoute le nouveau vault lu dans une ligne
