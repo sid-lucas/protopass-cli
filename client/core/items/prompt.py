@@ -12,12 +12,12 @@ def prompt_fields_for_type(item_type):
 
     for field in schema["required"]:
         max_len = FIELD_MAXLEN[field]
-        label = "Item name" if field.value == "title" else field.value
+        label = "Item name" if field.value == "name" else field.value
         fields[field.value] = prompt_field(label, max_len, allow_empty=False, logger=logger)
 
     for field in schema["recommended"]:
         max_len = FIELD_MAXLEN[field]
-        label = field.value
+        label = "Item name" if field.value == "name" else field.value
         fields[field.value] = prompt_field(label, max_len, allow_empty=True, logger=logger)
 
     return fields

@@ -60,7 +60,7 @@ def _fetch_item_rows():
 
             data = json.loads(plaintext)
             type = (data.get("type") or "-").upper()
-            title = data.get("title") or "-"
+            name = data.get("name") or "-"
             created_at = data.get("created_at")
             created_display = format_timestamp(created_at) if created_at else "-"
             updated_at = data.get("updated_at")
@@ -73,7 +73,7 @@ def _fetch_item_rows():
         rows.append({
             "idx": str(idx),
             "type": type,
-            "title": title,
+            "name": name,
             "created": created_display,
             "updated": updated_display,
             "uuid": item.get("item_id"),
@@ -93,7 +93,7 @@ def list_items(_args):
     columns = [
         ("idx", "#", 3),
         ("type", "Type", 8),
-        ("title", "Name", FIELD_MAXLEN[Field.TITLE]),
+        ("name", "Name", FIELD_MAXLEN[Field.NAME]),
         ("updated", "Last modified", 17),
         ("created", "Created", 17),
     ]
@@ -107,7 +107,7 @@ def show_item(args):
     current_user = AccountState.username()
     logger = log.get_logger(CTX.ITEM_SHOW, current_user)
 
-    # Récupère les lignes (idx, title, type, uuid, ...)
+    # Récupère les lignes (idx, name, type, uuid, ...)
     rows = _fetch_item_rows()
     if not rows:
         return
@@ -197,7 +197,7 @@ def create_item(args):
     fields = {}
 
     def _label_for(field: Field) -> str:
-        if field.value == "title":
+        if field.value == "name":
             return "Item name"
         return field.value.replace("_", " ")
 
@@ -265,4 +265,4 @@ def create_item(args):
         notify_user("Item creation failed.")
         return
 
-    notify_user(f"Item '{plaintext['title']}' created.")
+    notify_user(f"Item '{plaintext['name']}' created.")

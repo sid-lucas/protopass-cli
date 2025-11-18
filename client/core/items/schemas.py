@@ -9,7 +9,7 @@ class Type(str, Enum):
     OTHER = "other"
 
 class Field(str, Enum):
-    TITLE = "title"
+    NAME = "name"
     USERNAME = "username"
     PASSWORD = "password"
     URL = "url"
@@ -25,7 +25,7 @@ class Field(str, Enum):
     PHONE = "phone"
 
 FIELD_MAXLEN = {
-    Field.TITLE: 30,
+    Field.NAME: 30,
     Field.USERNAME: 50,
     Field.PASSWORD: 50,
     Field.URL: 200,
@@ -43,27 +43,27 @@ FIELD_MAXLEN = {
 
 SCHEMAS = {
     Type.LOGIN: {
-        "required": [Field.TITLE],
+        "required": [Field.NAME],
         "recommended": [Field.USERNAME, Field.PASSWORD, Field.URL],
     },
     Type.NOTE: {
-        "required": [Field.TITLE],
+        "required": [Field.NAME],
         "recommended": [Field.BODY],
     },
     Type.ALIAS: {
-        "required": [Field.TITLE],
+        "required": [Field.NAME],
         "recommended": [Field.EMAIL, Field.NOTES],
     },
     Type.CARD: {
-        "required": [Field.TITLE, Field.CARD_NUMBER],
+        "required": [Field.NAME, Field.CARD_NUMBER],
         "recommended": [Field.EXPIRY, Field.HOLDER, Field.CVV],
     },
     Type.IDENTITY: {
-        "required": [Field.TITLE],
+        "required": [Field.NAME],
         "recommended": [Field.FIRSTNAME, Field.LASTNAME, Field.EMAIL, Field.PHONE],
     },
     Type.OTHER: {
-        "required": [Field.TITLE],
+        "required": [Field.NAME],
         "recommended": [],
     },
 }
