@@ -52,11 +52,11 @@ def build_parser():
     # Commandes d'authentification
     # ============================================================
     p_register = subparsers.add_parser("register", help="Register a new account")
-    p_register.add_argument("--username", required=True, help="Username of the account")
+    p_register.add_argument("-u", "--username", required=True, help="Username of the account")
     p_register.set_defaults(func=auth.register_account)
 
     p_login = subparsers.add_parser("login", help="Log to account")
-    p_login.add_argument("--username", required=True, help="Username of the account")
+    p_login.add_argument("-u", "--username", required=True, help="Username of the account")
     p_login.set_defaults(func=auth.login_account)
 
     p_logout = subparsers.add_parser("logout", help="Logout from current session")
@@ -71,6 +71,8 @@ def build_parser():
     p_vault.set_defaults(func=lambda args: p_vault.print_help())
 
     p_vault_create = vault_sub.add_parser("create", help="Create a new vault")
+    p_vault_create.add_argument("-n", "--name", help="Vault name")
+    p_vault_create.add_argument("-d", "--description", help="Vault description")
     p_vault_create.set_defaults(func=vault.create_vault)
 
     p_vault_delete = vault_sub.add_parser("delete", help="Delete a vault")

@@ -5,7 +5,7 @@ from ..utils import logger as log
 from ..utils.common import get_id_by_index, fetch_vaults
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
-from ..utils.display import render_table, format_timestamp, prompt_field
+from ..utils.display import render_table, format_timestamp, prompt_field, verify_prompt
 from ..utils.crypto import (
     encrypt_b64_block,
     decrypt_b64_block,
@@ -197,8 +197,19 @@ def create_vault(_args):
         )
         return
 
-    vault_name = prompt_field("Vault name", 15, False, logger)
-    description = prompt_field("Description", 40, True, logger)
+    # Mode CLI si options fournies, sinon mode interactif
+    if hasattr(_args, "name") and _args.name:
+        vault_name = _args.name
+        if verify_prompt(vault_name, "Vault name", 15, False, logger) is False:
+            return
+    else:
+        vault_name = prompt_field("Vault name", 15, False, logger)
+    if hasattr(_args, "description") and _args.description:
+        description = _args.description
+        if verify_prompt(description, "Description", 40, True, logger) is False:
+            return
+    else:
+        description = prompt_field("Description", 40, True, logger)
 
     # Création du JSON
     now = datetime.now(timezone.utc).isoformat()

@@ -53,6 +53,30 @@ def render_table(rows: Iterable[Mapping[str, str]], columns: Sequence[tuple[str,
 
     return "\n" + "\n".join(lines)
 
+def verify_prompt(value, label, max_len, allow_empty, logger):
+    normalized = ""
+    if value is None:
+        normalized = ""
+    elif isinstance(value, str):
+        normalized = value.strip()
+    else:
+        normalized = str(value).strip()
+
+    if not normalized and allow_empty:
+        return None
+
+    if not normalized:
+        logger.warning(f"Empty value provided for '{label}'")
+        notify_user(f"{label} cannot be empty.")
+        return False
+
+    if len(normalized) > max_len:
+        logger.warning(f"Value for '{label}' exceeds {max_len} characters")
+        notify_user(f"{label} can't exceed {max_len} chars.")
+        return False
+    
+    return True
+
 
 def prompt_field(label, max_len, allow_empty, logger):
     suffix = " (optional)" if allow_empty else ""
@@ -60,14 +84,13 @@ def prompt_field(label, max_len, allow_empty, logger):
 
     while True:
         value = input(prompt).strip()
-        if not value and allow_empty:
+
+        valid = verify_prompt(value, label, max_len, allow_empty, logger)
+
+        if valid is None:
             return None
-        if not value:
-            logger.warning(f"Empty value provided for '{label}'")
-            notify_user("This field cannot be empty.")
-            continue
-        if len(value) > max_len:
-            logger.warning(f"Value for '{label}' exceeds {max_len} characters")
-            notify_user(f"Can't exceed {max_len} chars.")
-            continue
+
+        if valid is False:
+             continue
+        
         return value
