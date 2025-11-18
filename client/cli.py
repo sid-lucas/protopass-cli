@@ -119,7 +119,7 @@ def build_parser():
     common.add_argument("-n", "--name", help="Title of the item")
     common.add_argument("-e", "--email", "--username", dest="email", help="Account email or username")
     common.add_argument("-p", "--password", help="Account password")
-    common.add_argument("-u", "--url", help="Associated website URL")
+    common.add_argument("-U", "--url", help="Associated website URL")
 
     # Extra fields group
     extra = p_item_create.add_argument_group("Extra fields")
@@ -134,6 +134,7 @@ def build_parser():
     card.add_argument("--expiry", help="Expiration date")
     card.add_argument("--holder", help="Card holder name")
     card.add_argument("--cvv", help="Security code")
+    p_item_create.set_defaults(func=item.create_item)
 
     # ====== item list ======
     p_item_list = item_sub.add_parser("list", help="List all items in the selected vault")
