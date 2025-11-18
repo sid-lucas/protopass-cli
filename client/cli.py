@@ -96,12 +96,23 @@ def build_parser():
     p_item.set_defaults(func=lambda args: p_item.print_help())
 
     p_item_create = item_sub.add_parser("create", help="Create a new item in the selected vault")
+    # obligatoire
     p_item_create.add_argument("-t", "--type", required=True, help="Item type")
-    for field in Field:
-        flag = f"--{field.value.replace('_', '-')}"
-        help_text = field.value.replace("_", " ").capitalize()
-        p_item_create.add_argument(flag, dest=field.value, help=f"{help_text} value")
-    p_item_create.set_defaults(func=item.create_item)
+    # args avec raccourcis courts
+    p_item_create.add_argument("-n", "--name", help="Name value")
+    p_item_create.add_argument("-u", "--username", help="Username value")
+    p_item_create.add_argument("-p", "--password", help="Password value")
+    p_item_create.add_argument("-u", "--url", help="URL value")
+    p_item_create.add_argument("-e", "--email", help="Email value")
+    # autres args sans raccourcis
+    p_item_create.add_argument("--firstname", help="Firstname value")
+    p_item_create.add_argument("--lastname", help="Lastname value")
+    p_item_create.add_argument("--phone", help="Phone value")
+    p_item_create.add_argument("--card-number", help="Card number value")
+    p_item_create.add_argument("--expiry", help="Expiry value")
+    p_item_create.add_argument("--holder", help="Holder value")
+    p_item_create.add_argument("--cvv", help="CVV value")
+    p_item_create.add_argument("--notes", help="Notes value")
 
     p_item_list = item_sub.add_parser("list", help="List all items in the selected vault")
     p_item_list.set_defaults(func=item.list_items)

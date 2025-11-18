@@ -29,7 +29,6 @@ FIELD_MAXLEN = {
     Field.USERNAME: 50,
     Field.PASSWORD: 50,
     Field.URL: 200,
-    Field.BODY: 5000,
     Field.EMAIL: 100,
     Field.NOTES: 1000,
     Field.CARD_NUMBER: 20,
@@ -48,7 +47,7 @@ SCHEMAS = {
     },
     Type.NOTE: {
         "required": [Field.NAME],
-        "recommended": [Field.BODY],
+        "recommended": [Field.NOTES],
     },
     Type.ALIAS: {
         "required": [Field.NAME],
