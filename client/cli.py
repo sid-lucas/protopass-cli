@@ -6,10 +6,15 @@ from .core.items.schemas import Field
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
+HELP_FORMATTER = lambda prog: argparse.HelpFormatter(prog, max_help_position=40, width=120)
+
 class ShellArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("formatter_class", HELP_FORMATTER)
+        super().__init__(*args, **kwargs)
+
     def error(self, message):
         raise ValueError(message)
-
 
 SESSION_OPTIONAL_COMMANDS = {"login", "logout", "register", "shell"}
 
@@ -44,7 +49,7 @@ def build_parser():
     )
 
     # Sous-parseur principal qui accueille toutes les commandes de premier niveau
-    subparsers = parser.add_subparsers(dest="command", help="commands")
+    subparsers = parser.add_subparsers(dest="command", help="commands", parser_class=ShellArgumentParser)
 
     p_shell = subparsers.add_parser("shell", help="Start interactive protopass shell")
     p_shell.set_defaults(func=start_shell)
@@ -52,14 +57,18 @@ def build_parser():
     # ============================================================
     # Commandes d'authentification
     # ============================================================
+
+    # ====== register -u <username> ======
     p_register = subparsers.add_parser("register", help="Register a new account")
     p_register.add_argument("-u", "--username", required=True, help="Username of the account")
     p_register.set_defaults(func=auth.register_account)
 
+    # ====== login -u <username> ======
     p_login = subparsers.add_parser("login", help="Log to account")
     p_login.add_argument("-u", "--username", required=True, help="Username of the account")
     p_login.set_defaults(func=auth.login_account)
 
+    # ====== logout ======
     p_logout = subparsers.add_parser("logout", help="Logout from current session")
     p_logout.set_defaults(func=auth.logout_account)
 
@@ -68,22 +77,26 @@ def build_parser():
     # ============================================================
     p_vault = subparsers.add_parser("vault", help="Manage vaults")
     # Crée un sous-sous-parseur pour les actions vault (create/delete/...)
-    vault_sub = p_vault.add_subparsers(dest="vault_command")
+    vault_sub = p_vault.add_subparsers(dest="vault_command", parser_class=ShellArgumentParser)
     p_vault.set_defaults(func=lambda args: p_vault.print_help())
 
+    # ====== vault create ======
     p_vault_create = vault_sub.add_parser("create", help="Create a new vault")
     p_vault_create.add_argument("-n", "--name", help="Vault name")
     p_vault_create.add_argument("-d", "--description", help="Vault description")
     p_vault_create.set_defaults(func=vault.create_vault)
 
+    # ====== vault delete <idx> ======
     p_vault_delete = vault_sub.add_parser("delete", help="Delete a vault")
     p_vault_delete.add_argument("index", type=int, help="Index as shown in vault list")
     p_vault_delete.set_defaults(func=vault.delete_vault)
 
+    # ====== vault select <idx> ======
     p_vault_select = vault_sub.add_parser("select", help="Select a vault to use")
     p_vault_select.add_argument("index", type=int, help="Index as shown in vault list")
     p_vault_select.set_defaults(func=vault.select_vault)
 
+    # ====== vault list ======
     p_vault_list = vault_sub.add_parser("list", help="List all vaults")
     p_vault_list.set_defaults(func=vault.list_vaults)
 
@@ -92,31 +105,41 @@ def build_parser():
     # ============================================================
     p_item = subparsers.add_parser("item", help="Manage items")
     # Crée un sous-sous-parseur pour les actions item (create/delete/...)
-    item_sub = p_item.add_subparsers(dest="item_command")
+    item_sub = p_item.add_subparsers(dest="item_command", parser_class=ShellArgumentParser)
     p_item.set_defaults(func=lambda args: p_item.print_help())
 
+    # ====== item create ======
     p_item_create = item_sub.add_parser("create", help="Create a new item in the selected vault")
-    # obligatoire
-    p_item_create.add_argument("-t", "--type", required=True, help="Item type")
-    # args avec raccourcis courts
-    p_item_create.add_argument("-n", "--name", help="Name value")
-    p_item_create.add_argument("-u", "--username", help="Username value")
-    p_item_create.add_argument("-p", "--password", help="Password value")
-    p_item_create.add_argument("-u", "--url", help="URL value")
-    p_item_create.add_argument("-e", "--email", help="Email value")
-    # autres args sans raccourcis
-    p_item_create.add_argument("--firstname", help="Firstname value")
-    p_item_create.add_argument("--lastname", help="Lastname value")
-    p_item_create.add_argument("--phone", help="Phone value")
-    p_item_create.add_argument("--card-number", help="Card number value")
-    p_item_create.add_argument("--expiry", help="Expiry value")
-    p_item_create.add_argument("--holder", help="Holder value")
-    p_item_create.add_argument("--cvv", help="CVV value")
-    p_item_create.add_argument("--notes", help="Notes value")
+    # Required group
+    req = p_item_create.add_argument_group("Required")
+    req.add_argument("-t", "--type", required=True, help="Type of item to create (login, card, ...)")
 
+    # Common fields group
+    common = p_item_create.add_argument_group("Common fields")
+    common.add_argument("-n", "--name", help="Title of the item")
+    common.add_argument("-u", "--username", help="Account username or email")
+    common.add_argument("-p", "--password", help="Account password")
+    common.add_argument("-U", "--url", help="Associated website URL")
+
+    # Extra fields group
+    extra = p_item_create.add_argument_group("Extra fields")
+    extra.add_argument("--firstname", help="First name")
+    extra.add_argument("--lastname", help="Last name")
+    extra.add_argument("--phone", help="Phone number")
+    extra.add_argument("--notes", help="Additional notes")
+
+    # Card-specific group
+    card = p_item_create.add_argument_group("Card fields")
+    card.add_argument("--card-number", help="Card number")
+    card.add_argument("--expiry", help="Expiration date")
+    card.add_argument("--holder", help="Card holder name")
+    card.add_argument("--cvv", help="Security code")
+
+    # ====== item list ======
     p_item_list = item_sub.add_parser("list", help="List all items in the selected vault")
     p_item_list.set_defaults(func=item.list_items)
 
+    # ====== item show <idx> ======
     p_item_show = item_sub.add_parser("show", help="Show item details")
     p_item_show.add_argument("index", type=int, help="Index as shown in item list")
     p_item_show.set_defaults(func=item.show_item)
