@@ -10,11 +10,10 @@ class Type(str, Enum):
 
 class Field(str, Enum):
     NAME = "name"
-    USERNAME = "username"
+    EMAIL = "email"
     PASSWORD = "password"
     URL = "url"
     BODY = "body"
-    EMAIL = "email"
     NOTES = "notes"
     CARD_NUMBER = "card_number"
     EXPIRY = "expiry"
@@ -26,10 +25,9 @@ class Field(str, Enum):
 
 FIELD_MAXLEN = {
     Field.NAME: 30,
-    Field.USERNAME: 50,
+    Field.EMAIL: 100,
     Field.PASSWORD: 50,
     Field.URL: 200,
-    Field.EMAIL: 100,
     Field.NOTES: 1000,
     Field.CARD_NUMBER: 20,
     Field.EXPIRY: 10,
@@ -43,7 +41,7 @@ FIELD_MAXLEN = {
 SCHEMAS = {
     Type.LOGIN: {
         "required": [Field.NAME],
-        "recommended": [Field.USERNAME, Field.PASSWORD, Field.URL],
+        "recommended": [Field.EMAIL, Field.PASSWORD, Field.URL],
     },
     Type.NOTE: {
         "required": [Field.NAME],
@@ -51,7 +49,7 @@ SCHEMAS = {
     },
     Type.ALIAS: {
         "required": [Field.NAME],
-        "recommended": [Field.USERNAME, Field.NOTES],
+        "recommended": [Field.EMAIL, Field.NOTES],
     },
     Type.CARD: {
         "required": [Field.NAME, Field.CARD_NUMBER],
@@ -59,7 +57,7 @@ SCHEMAS = {
     },
     Type.IDENTITY: {
         "required": [Field.NAME],
-        "recommended": [Field.FIRSTNAME, Field.LASTNAME, Field.USERNAME, Field.PHONE],
+        "recommended": [Field.FIRSTNAME, Field.LASTNAME, Field.EMAIL, Field.PHONE],
     },
     Type.OTHER: {
         "required": [Field.NAME],

@@ -6,7 +6,7 @@ from .core.item_schema import Field
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
-HELP_FORMATTER = lambda prog: argparse.HelpFormatter(prog, max_help_position=40, width=120)
+HELP_FORMATTER = lambda prog: argparse.HelpFormatter(prog, max_help_position=45, width=120)
 
 class ShellArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
@@ -117,9 +117,9 @@ def build_parser():
     # Common fields group
     common = p_item_create.add_argument_group("Common fields")
     common.add_argument("-n", "--name", help="Title of the item")
-    common.add_argument("-u", "--username", help="Account username or email")
+    common.add_argument("-e", "--email", "--username", dest="email", help="Account email or username")
     common.add_argument("-p", "--password", help="Account password")
-    common.add_argument("-U", "--url", help="Associated website URL")
+    common.add_argument("-u", "--url", help="Associated website URL")
 
     # Extra fields group
     extra = p_item_create.add_argument_group("Extra fields")

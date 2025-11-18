@@ -199,6 +199,8 @@ def create_item(args):
     def _label_for(field: Field) -> str:
         if field.value == "name":
             return "Item name"
+        if field.value == "email":
+            return "Account email or username"
         return field.value.replace("_", " ")
 
     def _collect(field: Field, allow_empty: bool) -> bool:
