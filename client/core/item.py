@@ -1,6 +1,6 @@
 import uuid, json, os, base64
 from datetime import datetime, timezone
-from .items.schemas import Type, Field, SCHEMAS, FIELD_MAXLEN
+from .item_schema import Type, Field, SCHEMAS, FIELD_MAXLEN
 from .account_state import AccountState
 from ..utils import logger as log
 from ..utils.common import get_id_by_index, fetch_vaults, find_vault_by_id

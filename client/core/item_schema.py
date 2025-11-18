@@ -51,7 +51,7 @@ SCHEMAS = {
     },
     Type.ALIAS: {
         "required": [Field.NAME],
-        "recommended": [Field.EMAIL, Field.NOTES],
+        "recommended": [Field.USERNAME, Field.NOTES],
     },
     Type.CARD: {
         "required": [Field.NAME, Field.CARD_NUMBER],
@@ -59,7 +59,7 @@ SCHEMAS = {
     },
     Type.IDENTITY: {
         "required": [Field.NAME],
-        "recommended": [Field.FIRSTNAME, Field.LASTNAME, Field.EMAIL, Field.PHONE],
+        "recommended": [Field.FIRSTNAME, Field.LASTNAME, Field.USERNAME, Field.PHONE],
     },
     Type.OTHER: {
         "required": [Field.NAME],

@@ -2,7 +2,7 @@ import argparse, os, readline, atexit
 from .core import auth
 from .core import vault
 from .core import item
-from .core.items.schemas import Field
+from .core.item_schema import Field
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
