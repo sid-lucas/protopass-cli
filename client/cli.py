@@ -2,6 +2,7 @@ import argparse, os, readline, atexit
 from .core import auth
 from .core import vault
 from .core import item
+from .core.items.schemas import Field
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
@@ -95,6 +96,11 @@ def build_parser():
     p_item.set_defaults(func=lambda args: p_item.print_help())
 
     p_item_create = item_sub.add_parser("create", help="Create a new item in the selected vault")
+    p_item_create.add_argument("-t", "--type", required=True, help="Item type")
+    for field in Field:
+        flag = f"--{field.value.replace('_', '-')}"
+        help_text = field.value.replace("_", " ").capitalize()
+        p_item_create.add_argument(flag, dest=field.value, help=f"{help_text} value")
     p_item_create.set_defaults(func=item.create_item)
 
     p_item_list = item_sub.add_parser("list", help="List all items in the selected vault")

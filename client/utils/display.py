@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Iterable, Mapping, Sequence
 from . import logger as log
 from .logger import CTX, notify_user
-from ..core.account_state import AccountState
+from ..core.items.schemas import SCHEMAS, FIELD_MAXLEN
 
 
 def _shorten(text, width):
@@ -94,3 +94,19 @@ def prompt_field(label, max_len, allow_empty, logger):
              continue
         
         return value
+
+def prompt_fields_for_type(item_type, logger):
+    schema = SCHEMAS[item_type]
+    fields = {}
+
+    for field in schema["required"]:
+        max_len = FIELD_MAXLEN[field]
+        label = "Item name" if field.value == "title" else field.value
+        fields[field.value] = prompt_field(label, max_len, False, logger)
+
+    for field in schema["recommended"]:
+        max_len = FIELD_MAXLEN[field]
+        label = field.value
+        fields[field.value] = prompt_field(label, max_len, True, logger)
+
+    return fields

@@ -1,13 +1,12 @@
 import uuid, json, os, base64
 from datetime import datetime, timezone
 from .items.schemas import Type, Field, SCHEMAS, FIELD_MAXLEN
-from .items.prompt import prompt_fields_for_type
 from .account_state import AccountState
 from ..utils import logger as log
 from ..utils.common import get_id_by_index, fetch_vaults, find_vault_by_id
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
-from ..utils.display import render_table, format_timestamp
+from ..utils.display import render_table, format_timestamp, prompt_field, verify_prompt
 from ..utils.crypto import (
     encrypt_b64_block,
     decrypt_b64_block,
@@ -169,7 +168,7 @@ def show_item(args):
 
 
 
-def create_item(_args):
+def create_item(args):
     logger = log.get_logger(CTX.ITEM_CREATE, AccountState.username())
 
     # Vérifier qu’un vault est sélectionné
@@ -184,13 +183,53 @@ def create_item(_args):
         notify_user("Vault key not found. Try to select a vault again.")
         return
 
-    # POUR LINSTANT : TYPE "LOGIN" PAR DEFAUT
-    # A CHANGER PLUS TARD
-    item_type = Type.LOGIN
+    # Reçoit le type et doit être présent dans l'enum
+    if not args.type:
+        notify_user("You must specify --type <type>.")
+        return
+    try:
+        item_type = Type(args.type)
+    except ValueError:
+        notify_user(f"Invalid type '{args.type}'.\nValid types: {[t.value for t in Type]}")
+        return
+
+    schema = SCHEMAS[item_type]
+    fields = {}
+
+    def _label_for(field: Field) -> str:
+        if field.value == "title":
+            return "Item name"
+        return field.value.replace("_", " ")
+
+    def _collect(field: Field, allow_empty: bool) -> bool:
+        attr = field.value
+        cli_value = getattr(args, attr, None)
+        label = _label_for(field)
+        max_len = FIELD_MAXLEN[field]
+
+        if cli_value is not None:
+            valid = verify_prompt(cli_value, label, max_len, allow_empty, logger)
+            if valid is False:
+                return False
+            if valid is None:
+                fields[attr] = None
+            else:
+                fields[attr] = cli_value.strip()
+            return True
+
+        fields[attr] = prompt_field(label, max_len, allow_empty, logger)
+        return True
+
+    for field in schema["required"]:
+        if _collect(field, allow_empty=False) is False:
+            return
+
+    for field in schema["recommended"]:
+        if _collect(field, allow_empty=True) is False:
+            return
 
     # Création du JSON
     now = datetime.now(timezone.utc).isoformat()
-    fields = prompt_fields_for_type(item_type)
     plaintext = {
         "type": item_type.value,
         **fields,
