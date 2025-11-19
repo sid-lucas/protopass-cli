@@ -183,8 +183,8 @@ def start_shell(_args=None):
     print("ProtoPass CLI Shell. Type 'exit', 'quit' or 'q' to quit.")
 
     session_verified = None  # Evite de revalider la session à chaque appui sur Entrée
-    prefix = None  # Username affiché seulement si la session a été confirmée
-    suffix = None  # Nom du vault sélectionné (si disponible)
+    prefix = ""  # Username affiché seulement si la session a été confirmée
+    suffix = "" # Nom du vault sélectionné (si disponible)
     agent_missing_notified = False
 
     def ensure_agent_presence():
@@ -208,8 +208,8 @@ def start_shell(_args=None):
 
         if not ensure_agent_presence():
             session_verified = False
-            prefix = None
-            suffix = None
+            prefix = ""
+            suffix = ""
             return
 
         if not force and session_verified is not None:
