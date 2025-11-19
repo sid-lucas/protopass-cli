@@ -5,13 +5,14 @@ def get_id_by_index(index: int, rows: list, logger=None):
     """
     rows : liste de dicts contenant au minimum {"idx": "...", id_key: "..."}
     id_key : nom de la clé à retourner (ex: 'uuid' ou 'id')
+    retourne l'uuid et le nom
     """
     if not rows:
         return None
 
     for row in rows:
         if row.get("idx") == str(index):
-            return row.get("uuid")
+            return row.get("uuid"), row.get("name")
 
     notify_user(f"No entry found for index {index}.")
     if logger:

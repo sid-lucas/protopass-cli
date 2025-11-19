@@ -90,7 +90,7 @@ def delete_vault(args):
         return
     
     # Trouver le vault via l'index
-    vault_id_to_del = get_id_by_index(args.index, rows, logger)
+    vault_id_to_del, vault_name_to_del = get_id_by_index(args.index, rows, logger)
     if vault_id_to_del is None:
         return
 
@@ -118,7 +118,7 @@ def delete_vault(args):
         AccountState.clear_current_vault()
     AccountState.remove_vault_key(vault_id_to_del)
 
-    notify_user(f"Vault deleted successfully.")
+    notify_user(f"Vault '{vault_name_to_del}' deleted successfully.")
 
 def select_vault(args):
     current_user = AccountState.username()
@@ -130,8 +130,8 @@ def select_vault(args):
         return
 
     # Retrouve l'UUID à partir de l'index
-    vault_id = get_id_by_index(args.index, rows, logger)
-    if vault_id is None:
+    vault_id, vault_name = get_id_by_index(args.index, rows, logger)
+    if vault_id is None or vault_name is None:
         return
 
     # Essaie de récupérer la clé en RAM (si elle y est déjà)
@@ -150,7 +150,7 @@ def select_vault(args):
             return
 
     # Maj du vault courant
-    AccountState.set_current_vault(vault_id)
+    AccountState.set_current_vault(vault_id, vault_name)
 
     notify_user(f"Vault {args.index} is now selected.")
 

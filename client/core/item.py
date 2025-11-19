@@ -120,7 +120,7 @@ def show_item(args):
         return
 
     # Retrouve l'id de l'item à partir de l'index
-    item_id = get_id_by_index(args.index, rows, logger=logger)
+    item_id, _ = get_id_by_index(args.index, rows, logger=logger)
     if item_id is None:
         return
 

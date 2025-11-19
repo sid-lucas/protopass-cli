@@ -51,6 +51,8 @@ class AccountState:
     # Cache de l'id de vault sélectionné, et flag si l'id a besoin d'être loadé du disk (pour CLI)
     _current_vault_id = None
     _current_vault_loaded = False
+    _current_vault_name = None
+    _current_vault_name_loaded = False
 
     # Flag avec TTL indiquant si la session est valide afin d'éviter
     # des répétition de "Session verify" auprès du serveur lors d'une commande
@@ -167,7 +169,7 @@ class AccountState:
         return status
 
     @classmethod
-    def _persist_current_vault(cls, vault_id: str | None):
+    def _persist_current_vault(cls, vault_id: str | None, vault_name: str | None):
         data = cls._read()
         if not data:
             return
@@ -175,8 +177,13 @@ class AccountState:
         payload = {k: v for k, v in data.items() if k != "integrity"}
         if vault_id:
             payload["current_vault"] = vault_id
+            if vault_name is not None:
+                payload["current_vault_name"] = vault_name
+            else:
+                payload.pop("current_vault_name", None)
         else:
             payload.pop("current_vault", None)
+            payload.pop("current_vault_name", None)
 
         username = payload.get("username") or cls._cached_username or ""
         logger = log.get_logger(CTX.ACCOUNT_STATE, username)
@@ -193,6 +200,8 @@ class AccountState:
         cls.clear_vault_keys()
         cls._current_vault_id = None
         cls._current_vault_loaded = False
+        cls._current_vault_name = None
+        cls._current_vault_name_loaded = False
         cls._reset_session_cache()
 
     # ============================================================
@@ -486,16 +495,20 @@ class AccountState:
                 key[idx] = 0
 
     @classmethod
-    def set_current_vault(cls, vault_id: str):
+    def set_current_vault(cls, vault_id: str, vault_name: str | None = None):
         cls._current_vault_id = vault_id
         cls._current_vault_loaded = True
-        cls._persist_current_vault(vault_id)
+        cls._current_vault_name = vault_name
+        cls._current_vault_name_loaded = True
+        cls._persist_current_vault(vault_id, vault_name)
 
     @classmethod
     def clear_current_vault(cls):
         cls._current_vault_id = None
         cls._current_vault_loaded = True
-        cls._persist_current_vault(None)
+        cls._current_vault_name = None
+        cls._current_vault_name_loaded = True
+        cls._persist_current_vault(None, None)
 
     @classmethod
     def current_vault(cls):
@@ -504,11 +517,20 @@ class AccountState:
         return cls._current_vault_id
 
     @classmethod
+    def current_vault_name(cls):
+        if not cls._current_vault_name_loaded:
+            cls._load_current_vault_from_disk()
+        return cls._current_vault_name
+
+    @classmethod
     def _load_current_vault_from_disk(cls):
         data = cls._read()
         if not data:
             cls._current_vault_id = None
+            cls._current_vault_name = None
         else:
             cls._current_vault_id = data.get("current_vault")
+            cls._current_vault_name = data.get("current_vault_name")
         cls._current_vault_loaded = True
+        cls._current_vault_name_loaded = True
         return cls._current_vault_id

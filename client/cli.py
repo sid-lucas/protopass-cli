@@ -183,7 +183,8 @@ def start_shell(_args=None):
     print("ProtoPass CLI Shell. Type 'exit', 'quit' or 'q' to quit.")
 
     session_verified = None  # Evite de revalider la session à chaque appui sur Entrée
-    prompt_user = None  # Username affiché seulement si la session a été confirmée
+    prefix = None  # Username affiché seulement si la session a été confirmée
+    suffix = None  # Nom du vault sélectionné (si disponible)
     agent_missing_notified = False
 
     def ensure_agent_presence():
@@ -203,24 +204,30 @@ def start_shell(_args=None):
         return False
 
     def refresh_prompt_user(force=False):
-        nonlocal session_verified, prompt_user
+        nonlocal session_verified, prefix, suffix
 
         if not ensure_agent_presence():
             session_verified = False
-            prompt_user = None
+            prefix = None
+            suffix = None
             return
 
         if not force and session_verified is not None:
             return
 
         session_verified = auth.AccountState.valid()
-        prompt_user = auth.AccountState.username() if session_verified else None
+        if session_verified:
+            prefix = auth.AccountState.username()+"@"
+            suffix = "["+auth.AccountState.current_vault_name()+"]"
+        else:
+            prefix = ""
+            suffix = ""
 
     while True:
         try:
             refresh_prompt_user()
-            prompt = f"{prompt_user}@protopass> " if prompt_user else "protopass> "
-            raw_line = input(f"\n{prompt}").strip()
+            
+            raw_line = input(f"\n{prefix}protopass{suffix}> ").strip()
             
             if not raw_line:
                 continue
