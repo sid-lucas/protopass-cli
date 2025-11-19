@@ -77,6 +77,25 @@ def _fetch_vault_rows():
 
     return rows
 
+
+def ensure_vault_key(vault_id: str, logger=None):
+    """
+    Garantit que la clé du vault est disponible en mémoire.
+    Rafraîchit le cache via _fetch_vault_rows si nécessaire.
+    """
+
+    key = AccountState.vault_key(vault_id)
+    if key is not None:
+        return key
+
+    rows = _fetch_vault_rows()
+    if not rows:
+        if logger:
+            logger.error("Unable to reload vault key cache.")
+        return None
+
+    return AccountState.vault_key(vault_id)
+
 def delete_vault(args):
     # récupération du contexte utilisateur actuel
     session_payload = AccountState.session_payload()
@@ -135,20 +154,10 @@ def select_vault(args):
         return
 
     # Essaie de récupérer la clé en RAM (si elle y est déjà)
-    vault_key = AccountState.vault_key(vault_id)
+    vault_key = ensure_vault_key(vault_id, logger)
     if vault_key is None:
-        # Si pas en RAM, on déclenche un fetch complet (equivalent de vault list)
-        rows = _fetch_vault_rows()
-        if not rows:
-            return
-
-        # Maintenant la clé DOIT être en RAM si tout s’est bien passé
-        vault_key = AccountState.vault_key(vault_id)
-        if vault_key is None:
-            logger.error(f"Failed to load vault_key for vault {vault_id}")
-            notify_user("Unable to decrypt selected vault key.")
-            return
-
+        return
+    
     # Maj du vault courant
     AccountState.set_current_vault(vault_id, vault_name)
 

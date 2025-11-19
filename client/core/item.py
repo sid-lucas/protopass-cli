@@ -2,6 +2,7 @@ import uuid, json, os, base64
 from datetime import datetime, timezone
 from .item_schema import Type, Field, SCHEMAS, FIELD_MAXLEN
 from .account_state import AccountState
+from . import vault
 from .generator import PasswordOptions, generate_password
 from ..utils import logger as log
 from ..utils.common import get_id_by_index, fetch_vaults, find_vault_by_id
@@ -38,10 +39,8 @@ def _fetch_item_rows():
     if not vault_id:
         notify_user("No vault selected. Use: vault select <index>.")
         return None
-    vault_key = AccountState.vault_key(vault_id)
+    vault_key = vault.ensure_vault_key(vault_id, logger)
     if vault_key is None:
-        logger.error("No vault key in memory for current vault.")
-        notify_user("Selected vault not found. Try to select the vault again.")
         return None
 
     # Récupère tous les vaults et trouve celui qui nous intéresse
@@ -130,10 +129,9 @@ def show_item(args):
         notify_user("No vault selected. Use: vault select <index>.")
         return
 
-    vault_key = AccountState.vault_key(vault_id)
+    vault_key = vault.ensure_vault_key(vault_id, logger)
     if vault_key is None:
-        logger.error("No vault key in memory for current vault.")
-        notify_user("Vault key not found. Try to select the vault again.")
+        notify_user("Unable to load the selected vault key. Try to select the vault again.")
         return
 
     # Récupère tous les vaults puis celui qui nous intéresse

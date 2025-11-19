@@ -219,6 +219,8 @@ def start_shell(_args=None):
         if session_verified:
             prefix = auth.AccountState.username()+"@"
             suffix = "["+auth.AccountState.current_vault_name()+"]"
+            if not suffix:
+                suffix = ""
         else:
             prefix = ""
             suffix = ""
@@ -226,7 +228,7 @@ def start_shell(_args=None):
     while True:
         try:
             refresh_prompt_user()
-            
+
             raw_line = input(f"\n{prefix}protopass{suffix}> ").strip()
             
             if not raw_line:
