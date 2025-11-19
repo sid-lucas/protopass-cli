@@ -2,6 +2,7 @@ import uuid, json, os, base64
 from datetime import datetime, timezone
 from .item_schema import Type, Field, SCHEMAS, FIELD_MAXLEN
 from .account_state import AccountState
+from .generator import PasswordOptions, generate_password
 from ..utils import logger as log
 from ..utils.common import get_id_by_index, fetch_vaults, find_vault_by_id
 from ..utils.logger import CTX, notify_user
@@ -194,6 +195,9 @@ def create_item(args):
         return
 
     schema = SCHEMAS[item_type]
+
+    if getattr(args, "password_auto", False):
+        args.password = generate_password(options=PasswordOptions())
     fields = {}
 
     def _label_for(field: Field) -> str:

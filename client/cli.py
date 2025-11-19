@@ -119,6 +119,7 @@ def build_parser():
     common.add_argument("-n", "--name", help="Title of the item")
     common.add_argument("-e", "--email", "--username", dest="email", help="Account email or username")
     common.add_argument("-p", "--password", help="Account password")
+    common.add_argument("-pA", "--password-auto", action="store_true", help="Generate strong password automatically")
     common.add_argument("-U", "--url", help="Associated website URL")
 
     # Extra fields group
