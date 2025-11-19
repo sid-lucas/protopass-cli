@@ -7,7 +7,13 @@ from ..utils import logger as log
 from ..utils.common import get_id_by_index, fetch_vaults, find_vault_by_id
 from ..utils.logger import CTX, notify_user
 from ..utils.network import api_post, handle_resp
-from ..utils.display import render_table, format_timestamp, prompt_field, verify_prompt
+from ..utils.display import (
+    render_table,
+    format_timestamp,
+    prompt_field,
+    verify_prompt,
+    render_item_details,
+)
 from ..utils.crypto import (
     encrypt_b64_block,
     decrypt_b64_block,
@@ -160,12 +166,9 @@ def show_item(args):
     
     data = json.loads(plaintext)
 
-    # Affichage simple du JSON déchiffré
-    # TODO display.py affichage propre :
+    # Affichage plus lisible (table Field/Value)
     print("\n=== Item details ===")
-    for k, v in data.items():
-        print(f"{k}: {v}")
-    print("")
+    print(render_item_details(data))
 
 
 

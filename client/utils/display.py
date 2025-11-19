@@ -1,6 +1,6 @@
 import textwrap
 from datetime import datetime
-from typing import Iterable, Mapping, Sequence
+from typing import Iterable, Mapping, Sequence, Any
 from . import logger as log
 from .logger import CTX, notify_user
 
@@ -51,6 +51,61 @@ def render_table(rows: Iterable[Mapping[str, str]], columns: Sequence[tuple[str,
     lines.append(f"Total: {len(materialized_rows)}")
 
     return "\n" + "\n".join(lines)
+
+
+
+def render_item_details(data: Mapping[str, Any]) -> str:
+    """
+    Rendu lisible d'un item (une ligne par champ, wrapping propre).
+    """
+
+    special_upper = {"url": "URL", "cvv": "CVV"}
+    timestamp_keys = {"created_at", "updated_at"}
+    ordered_rows: list[tuple[str, str]] = []
+    meta_rows: list[tuple[str, str]] = []
+
+    def normalize(key: str, value: Any) -> tuple[str, str]:
+        if key in special_upper:
+            label = special_upper[key]
+        else:
+            label = key.replace("_", " ").title()
+        if key in timestamp_keys and isinstance(value, str):
+            display = format_timestamp(value)
+        elif value is None or value == "":
+            display = "-"
+        else:
+            display = str(value)
+        return label, display
+
+    for k, v in data.items():
+        label, display = normalize(k, v)
+        (meta_rows if k in timestamp_keys else ordered_rows).append((label, display))
+
+    all_rows = ordered_rows + meta_rows
+    if not all_rows:
+        return ""
+
+    label_width = max(len(label) for label, _ in all_rows)
+    value_width = max(30, 100 - label_width - 3)
+
+    def render_rows(rows: list[tuple[str, str]]) -> list[str]:
+        lines = []
+        for label, value in rows:
+            wrapped = textwrap.wrap(value, width=value_width) or [""]
+            first_line = f"{label.ljust(label_width)} : {wrapped[0]}"
+            lines.append(first_line.rstrip())
+            for extra in wrapped[1:]:
+                lines.append(" " * (label_width + 3) + extra)
+        return lines
+
+    lines = render_rows(ordered_rows)
+    if meta_rows:
+        if lines:
+            sep_len = max(10, label_width + value_width + 3)
+            lines.append("-" * (sep_len))
+        lines.extend(render_rows(meta_rows))
+
+    return "\n".join(lines)
 
 def verify_prompt(value, label, max_len, allow_empty, logger):
     normalized = ""
