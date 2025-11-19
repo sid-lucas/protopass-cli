@@ -1,4 +1,4 @@
-import getpass, base64, srp, re
+import getpass, base64, srp, re, sys
 from Crypto.Hash import SHA256
 from .account_state import AccountState
 from ..utils import logger as log
@@ -137,10 +137,27 @@ def login_account(args):
     private_block = None
     private_user_key = None
 
+    password_from_stdin = None
+    if getattr(args, "password_stdin", False):
+        stdin_data = sys.stdin.read()
+        # Retire seulement les retours à la ligne ajoutés par echo
+        password_from_stdin = stdin_data.rstrip("\r\n")
+        if stdin_data == "":
+            notify_user("No password provided on stdin.")
+            return
+
     try:
-        # Autorise plusieurs tentatives de saisie avant d'abandonner
-        for attempt in range(MAX_PASSWORD_ATTEMPTS):
-            password = getpass.getpass(f"Enter the password of '{username}': ")
+        # Autorise plusieurs tentatives de saisie avant d'abandonner, sauf si --password-stdin
+        if password_from_stdin is not None:
+            attempts = 1 
+        else:
+            attempts = MAX_PASSWORD_ATTEMPTS
+
+        for attempt in range(attempts):
+            if password_from_stdin is not None:
+                password = password_from_stdin
+            else:
+                password = getpass.getpass(f"Enter the password of '{username}': ")
 
             # Création de l'objet SRP côté client
             usr = srp.User(

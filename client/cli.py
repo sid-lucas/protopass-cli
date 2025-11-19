@@ -66,6 +66,7 @@ def build_parser():
     # ====== login -u <username> ======
     p_login = subparsers.add_parser("login", help="Log to account")
     p_login.add_argument("-u", "--username", required=True, help="Username of the account")
+    p_login.add_argument("--password-stdin", action="store_true", help="Read the account password from standard input",)
     p_login.set_defaults(func=auth.login_account)
 
     # ====== logout ======
@@ -217,10 +218,10 @@ def start_shell(_args=None):
 
         session_verified = auth.AccountState.valid()
         if session_verified:
-            prefix = auth.AccountState.username()+"@"
-            suffix = "["+auth.AccountState.current_vault_name()+"]"
-            if not suffix:
-                suffix = ""
+            username = auth.AccountState.username() or ""
+            prefix = f"{username}@" if username else ""
+            vault_name = auth.AccountState.current_vault_name() or ""
+            suffix = f"[{vault_name}]" if vault_name else ""
         else:
             prefix = ""
             suffix = ""

@@ -161,7 +161,7 @@ def select_vault(args):
     # Maj du vault courant
     AccountState.set_current_vault(vault_id, vault_name)
 
-    notify_user(f"Vault {args.index} is now selected.")
+    notify_user(f"Vault {args.index} [{vault_name}] is now selected.")
 
     
 def list_vaults(_args):
