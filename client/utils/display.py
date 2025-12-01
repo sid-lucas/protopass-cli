@@ -59,16 +59,12 @@ def render_item_details(data: Mapping[str, Any]) -> str:
     Rendu lisible d'un item (une ligne par champ, wrapping propre).
     """
 
-    special_upper = {"url": "URL", "cvv": "CVV"}
     timestamp_keys = {"created_at", "updated_at"}
     ordered_rows: list[tuple[str, str]] = []
     meta_rows: list[tuple[str, str]] = []
 
     def normalize(key: str, value: Any) -> tuple[str, str]:
-        if key in special_upper:
-            label = special_upper[key]
-        else:
-            label = key.replace("_", " ").title()
+        label = key.replace("_", " ").lower()
         if key in timestamp_keys and isinstance(value, str):
             display = format_timestamp(value)
         elif value is None or value == "":
