@@ -12,6 +12,7 @@ class Field(str, Enum):
     NAME = "name"
     EMAIL = "email"
     PASSWORD = "password"
+    TOTP_SECRET = "totp"
     URL = "url"
     BODY = "body"
     NOTES = "notes"
@@ -27,6 +28,7 @@ FIELD_MAXLEN = {
     Field.NAME: 30,
     Field.EMAIL: 100,
     Field.PASSWORD: 50,
+    Field.TOTP_SECRET: 100,
     Field.URL: 200,
     Field.NOTES: 1000,
     Field.CARD_NUMBER: 20,

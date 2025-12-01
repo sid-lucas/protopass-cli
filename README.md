@@ -7,4 +7,5 @@ TODO :
 - update vault/item informations
 - alias API simplelogin
 - copy to clipboard
-- autofill
+- (autofill)
+S
