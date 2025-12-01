@@ -362,7 +362,53 @@ def create_item(args):
 
     notify_user(f"Item '{plaintext['name']}' created.")
 
-def edit_item(args):
+
+
+def add_item_field(args):
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.ITEM_UPDATE, current_user)
+
+    # Récupérer tous les items du vault courant
+    rows = _fetch_item_rows()
+    if not rows:
+        return
+
+    # Trouver item_id via index fourni
+    item_id, _ = get_id_by_index(args.index, rows, logger=logger)
+    if item_id is None:
+        return
+
+    # Charger les infos de l'item
+    loaded = _load_item(item_id, logger)
+    if not loaded:
+        return
+    raw_item, item_key, data, target_vault = loaded
+
+    # Vérifier le champ fourni
+    try:
+        field = Field(args.field)
+    except ValueError:
+        notify_user(f"Invalid field '{args.field}'.")
+        return
+    if field.value in data:
+        notify_user(f"Field '{field.value}' already exists in this item.")
+        return
+
+    # Vérifier longueur max
+    max_len = FIELD_MAXLEN.get(field)
+    if max_len and len(args.value) > max_len:
+        notify_user(f"Value too long for '{field.value}' (max {max_len}).")
+        return
+
+    # Mise à jour du champ
+    data[field.value] = args.value
+    ok = _save_item(item_id, item_key, data, target_vault, raw_item, logger)
+    if not ok:
+        return
+
+    notify_user(f"Field '{field.value}' added.")
+
+def edit_item_field(args):
     current_user = AccountState.username()
     logger = log.get_logger(CTX.ITEM_UPDATE, current_user)
 

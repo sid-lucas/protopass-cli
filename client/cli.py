@@ -147,18 +147,29 @@ def build_parser():
     p_item_show.add_argument("index", type=int, help="Index as shown in item list")
     p_item_show.set_defaults(func=item.show_item)
 
-    # ====== item edit ======
-    p_item_edit = item_sub.add_parser("edit", help="Edit a specific field of an item")
-    p_item_edit.add_argument("index", type=int, help="Index as shown in item list")
-    p_item_edit.add_argument("field", help="Field name to edit (e.g. name, email, password, url)")
-    p_item_edit.add_argument("value", help="New value for the field")
-    p_item_edit.set_defaults(func=item.edit_item)
-
     # ====== item delete ======
-    p_item_delete = item_sub.add_parser("delete", help="Delete a field from an item")
-    p_item_delete.add_argument("index", type=int, help="Index of the item")
-    p_item_delete.add_argument("field", help="Field to delete")
-    p_item_delete.set_defaults(func=item.delete_item_field)
+
+
+    # ====== item field management ======
+    # field add
+    p_item_field_add = item_sub.add_parser("field-add", help="Add a new field to an item")
+    p_item_field_add.add_argument("index", type=int, help="Index as shown in item list")
+    p_item_field_add.add_argument("field", help="Field name to add (e.g. name, email, password, url)")
+    p_item_field_add.add_argument("value", help="Value for the new field")
+    p_item_field_add.set_defaults(func=item.add_item_field)
+
+    # field edit
+    p_item_field_edit = item_sub.add_parser("field-edit", help="Edit a specific field of an item")
+    p_item_field_edit.add_argument("index", type=int, help="Index as shown in item list")
+    p_item_field_edit.add_argument("field", help="Field name to edit (e.g. name, email, password, url)")
+    p_item_field_edit.add_argument("value", help="New value for the field")
+    p_item_field_edit.set_defaults(func=item.edit_item_field)
+
+    # field delete
+    p_item_field_delete = item_sub.add_parser("field-delete", help="Delete a field from an item")
+    p_item_field_delete.add_argument("index", type=int, help="Index of the item")
+    p_item_field_delete.add_argument("field", help="Field to delete")
+    p_item_field_delete.set_defaults(func=item.delete_item_field)
 
     return parser
 

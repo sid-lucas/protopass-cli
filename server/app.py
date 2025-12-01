@@ -152,6 +152,8 @@ def srp_verify():
 #  Routes protégées (requièrent une session valide)
 # ============================================================
 
+# ---------- Session ----------
+
 @app.post("/session/verify")
 @require_session
 def verify_session(username):
@@ -198,6 +200,8 @@ def get_userkey(username):
     return make_resp("ok", "User key", "user key retrieved", 200,
         data={"user_key": user["user_key"]}
     )
+
+# ---------- Vault ----------
 
 @app.post("/vault/create")
 @require_session
@@ -251,6 +255,8 @@ def delete_vault_route(username):
     return make_resp("ok", "Vault Delete", f"Vault '{vault_id[:8]}...' deleted", 200,
         data={"vault_id": vault_id}
     )
+
+# ---------- Item ----------
 
 @app.post("/item/create")
 @require_session
