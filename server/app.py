@@ -2,7 +2,7 @@ import base64, srp
 from flask import Flask, request
 from functools import wraps
 from server.user_store import add_user, get_user
-from server.vault_store import add_vault, get_user_vaults, delete_vault, add_item
+from server.vault_store import add_vault, get_user_vaults, delete_vault, add_item, update_item as update_item_store
 from server.session_store import create_session, revoke_session, is_valid, get_session
 from server.utils.response import make_resp
 
@@ -289,9 +289,8 @@ def update_item(username):
     if not vault_id or not item:
         return make_resp("error", "Item Update", "missing vault_id or item", 400)
 
-    # add_item remplace l'item si item_id existe déjà
     try:
-        ok = add_item(username, vault_id, item)
+        ok = update_item_store(username, vault_id, item)
     except ValueError as e:
         return make_resp("error", "Item Update", str(e), 400)
 

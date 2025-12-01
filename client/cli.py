@@ -147,6 +147,13 @@ def build_parser():
     p_item_show.add_argument("index", type=int, help="Index as shown in item list")
     p_item_show.set_defaults(func=item.show_item)
 
+    # ====== item edit ======
+    p_item_edit = item_sub.add_parser("edit", help="Edit a specific field of an item")
+    p_item_edit.add_argument("index", type=int, help="Index as shown in item list")
+    p_item_edit.add_argument("field", help="Field name to edit (e.g. name, email, password, url)")
+    p_item_edit.add_argument("value", help="New value for the field")
+    p_item_edit.set_defaults(func=item.edit_item)
+
 
     return parser
 

@@ -82,3 +82,33 @@ def add_item(username_hash: str, vault_id: str, item: dict) -> bool:
     items.append(item)
     _save_user_vaults(username_hash, vaults)
     return True
+
+def update_item(username_hash: str, vault_id: str, item: dict) -> bool:
+    """
+    Met à jour un item existant dans un vault.
+    """
+    vaults = get_user_vaults(username_hash)
+
+    target = None
+    for v in vaults:
+        if v.get("vault_id") == vault_id:
+            target = v
+            break
+    if target is None:
+        raise ValueError("vault not found")
+
+    items = target.get("items")
+    if items is None:
+        raise ValueError("item_id not found")
+
+    item_id = item.get("item_id")
+    if not item_id:
+        raise ValueError("missing item_id")
+
+    for idx, existing in enumerate(items):
+        if existing.get("item_id") == item_id:
+            items[idx] = item
+            _save_user_vaults(username_hash, vaults)
+            return True
+
+    raise ValueError("item_id not found")
