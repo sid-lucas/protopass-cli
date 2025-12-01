@@ -1,10 +1,17 @@
 import base64, srp
 from flask import Flask, request
 from functools import wraps
-from server.user_store import add_user, get_user
-from server.vault_store import add_vault, get_user_vaults, delete_vault, add_item, update_item as update_item_store
-from server.session_store import create_session, revoke_session, is_valid, get_session
 from server.utils.response import make_resp
+from server.user_store import add_user, get_user
+from server.session_store import create_session, revoke_session, is_valid, get_session
+from server.vault_store import (
+    get_user_vaults,
+    add_vault,
+    remove_vault,
+    add_item,
+    modify_item,
+    remove_item,
+)
 
 app = Flask(__name__)
 
@@ -247,7 +254,7 @@ def delete_vault_route(username):
     if not vault_id:
         return make_resp("error", "Vault Delete", "missing vault_id", 400)
 
-    ok = delete_vault(username, vault_id)
+    ok = remove_vault(username, vault_id)
 
     if not ok:
         return make_resp("error", "Vault Delete", "vault not found", 404)
@@ -287,6 +294,10 @@ def create_item(username):
 @app.post("/item/update")
 @require_session
 def update_item(username):
+    """
+    Met à jour un item existant dans un vault de l'utilisateur authentifié.
+    (Fonctionne pour les champs ajouté, modifiés ou supprimés)
+    """
     data = request.get_json(force=True) or {}
 
     vault_id = data.get("vault_id")
@@ -296,7 +307,7 @@ def update_item(username):
         return make_resp("error", "Item Update", "missing vault_id or item", 400)
 
     try:
-        ok = update_item_store(username, vault_id, item)
+        ok = modify_item(username, vault_id, item)
     except ValueError as e:
         return make_resp("error", "Item Update", str(e), 400)
 
@@ -308,6 +319,30 @@ def update_item(username):
         data={"item_id": item.get("item_id")}
     )
 
+@app.post("/item/delete")
+@require_session
+def delete_item(username):
+    data = request.get_json(force=True) or {}
+
+    vault_id = data.get("vault_id")
+    item_id = data.get("item_id")
+
+    if not vault_id or not item_id:
+        return make_resp("error", "Item Delete", "missing vault_id or item_id", 400)
+
+    try:
+        ok = remove_item(username, vault_id, item_id)
+    except ValueError as e:
+        return make_resp("error", "Item Delete", str(e), 400)
+
+    if not ok:
+        return make_resp("error", "Item Delete", "unable to delete item", 500)
+
+    return make_resp("ok", "Item Delete",
+        f"Item '{item_id[:8]}...' deleted",
+        200,
+        data={"item_id": item_id}
+    )
 
 
 

@@ -22,6 +22,10 @@ from ..utils.crypto import (
     bytes_from_b64_block,
 )
 
+# ============================================================
+#  Internal helpers
+# ============================================================
+
 def _fetch_item_rows():
     """
     Récupère et déchiffre les items du vault courant.
@@ -169,11 +173,9 @@ def _save_item(item_id, item_key, data, target_vault, raw_item, logger):
 
     return True
 
-
-
-
-
-
+# ============================================================
+#  Gestion des items
+# ============================================================
 
 def list_items(_args):
     if not AccountState.valid():
@@ -255,8 +257,6 @@ def show_item(args):
     # Affichage plus lisible (table Field/Value)
     print("\n=== Item details ===")
     print(render_item_details(data))
-
-
 
 def create_item(args):
     logger = log.get_logger(CTX.ITEM_CREATE, AccountState.username())
@@ -362,7 +362,45 @@ def create_item(args):
 
     notify_user(f"Item '{plaintext['name']}' created.")
 
+def delete_item(args):
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.ITEM_DELETE, current_user)
 
+    if not AccountState.valid():
+        print("Please login to delete an item.")
+        return
+
+    rows = _fetch_item_rows()
+    if not rows:
+        return
+
+    item_id, _ = get_id_by_index(args.index, rows, logger=logger)
+    if item_id is None:
+        return
+
+    vault_id = AccountState.current_vault()
+    if not vault_id:
+        notify_user("No vault selected.")
+        return
+
+    payload = {
+        **AccountState.session_payload(),
+        "vault_id": vault_id,
+        "item_id": item_id
+    }
+
+    resp = api_post("/item/delete", payload)
+    data = handle_resp(resp, context=CTX.ITEM_DELETE)
+
+    if data is None:
+        notify_user("Item deletion failed.")
+        return
+
+    notify_user(f"Item #{args.index} deleted.")
+
+# ============================================================
+#  Gestion des champs d'un item
+# ============================================================
 
 def add_item_field(args):
     current_user = AccountState.username()
@@ -497,4 +535,3 @@ def delete_item_field(args):
         return
 
     notify_user(f"Field '{field.value}' deleted.")
-

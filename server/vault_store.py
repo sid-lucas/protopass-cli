@@ -37,7 +37,7 @@ def add_vault(username_hash: str, vault_id: str, key_enc: str, signature: str, m
     _save_user_vaults(username_hash, vaults)
     return True
 
-def delete_vault(username_hash: str, vault_id: str) -> bool:
+def remove_vault(username_hash: str, vault_id: str) -> bool:
     vaults = get_user_vaults(username_hash)
 
     # filtre tous les vaults sauf celui ciblé
@@ -83,7 +83,7 @@ def add_item(username_hash: str, vault_id: str, item: dict) -> bool:
     _save_user_vaults(username_hash, vaults)
     return True
 
-def update_item(username_hash: str, vault_id: str, item: dict) -> bool:
+def modify_item(username_hash: str, vault_id: str, item: dict) -> bool:
     """
     Met à jour un item existant dans un vault.
     """
@@ -108,6 +108,34 @@ def update_item(username_hash: str, vault_id: str, item: dict) -> bool:
     for idx, existing in enumerate(items):
         if existing.get("item_id") == item_id:
             items[idx] = item
+            _save_user_vaults(username_hash, vaults)
+            return True
+
+    raise ValueError("item_id not found")
+
+def remove_item(username_hash: str, vault_id: str, item_id: str) -> bool:
+    """
+    Supprime un item complet dans un vault.
+    """
+    vaults = get_user_vaults(username_hash)
+
+    # Trouver le vault
+    target = None
+    for v in vaults:
+        if v.get("vault_id") == vault_id:
+            target = v
+            break
+    if target is None:
+        raise ValueError("vault not found")
+
+    items = target.get("items")
+    if items is None:
+        raise ValueError("no items in vault")
+
+    # Trouver item_id
+    for idx, existing in enumerate(items):
+        if existing.get("item_id") == item_id:
+            del items[idx]
             _save_user_vaults(username_hash, vaults)
             return True
 

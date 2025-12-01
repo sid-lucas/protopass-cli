@@ -148,7 +148,9 @@ def build_parser():
     p_item_show.set_defaults(func=item.show_item)
 
     # ====== item delete ======
-
+    p_item_delete = item_sub.add_parser("delete", help="Delete an entire item")
+    p_item_delete.add_argument("index", type=int, help="Index of the item to delete")
+    p_item_delete.set_defaults(func=item.delete_item)
 
     # ====== item field management ======
     # field add
