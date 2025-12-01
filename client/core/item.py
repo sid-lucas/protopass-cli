@@ -87,6 +87,94 @@ def _fetch_item_rows():
 
     return rows
 
+def _load_item(item_id, logger):
+    """
+    Charge un item complet :
+    - retrouve le vault courant
+    - retrouve l'item brut
+    - déchiffre item_key
+    - déchiffre data JSON
+    Retourne (raw_item, item_key, data, target_vault)
+    """
+    session_payload = AccountState.session_payload()
+    if session_payload is None:
+        return None
+
+    current_user = AccountState.username()
+
+    # Récupere le vault courant
+    vault_id = AccountState.current_vault()
+    if not vault_id:
+        notify_user("No vault selected.")
+        return None
+
+    vault_key = vault.ensure_vault_key(vault_id, logger)
+    if vault_key is None:
+        return None
+
+    # Récupère les vaults et trouver le bon
+    vaults = fetch_vaults(session_payload, current_user, CTX.ITEM_SHOW)
+    target_vault = find_vault_by_id(vaults, vault_id)
+    if target_vault is None:
+        notify_user("Vault not found on server.")
+        return None
+
+    # Trouver l'item brut
+    raw_items = target_vault.get("items", [])
+    raw_item = next((it for it in raw_items if it.get("item_id") == item_id), None)
+    if raw_item is None:
+        notify_user("Item not found.")
+        return None
+
+    # Déchiffrer clés + contenu
+    try:
+        item_key = decrypt_b64_block(vault_key, raw_item["key"])
+        plaintext = decrypt_b64_block(item_key, raw_item["content"])
+        data = json.loads(plaintext)
+    except Exception as e:
+        logger.error(f"Failed to decrypt item: {e}")
+        return None
+
+    return raw_item, item_key, data, target_vault
+
+def _save_item(item_id, item_key, data, target_vault, raw_item, logger):
+    """
+    Rechiffre l'item modifié et le renvoie au serveur.
+    """
+    # Mise à jour du timestamp
+    now = datetime.now(timezone.utc).isoformat()
+    data["updated_at"] = now
+
+    # Rechiffrement du JSON
+    plaintext = json.dumps(data).encode()
+    new_content_block = encrypt_b64_block(item_key, plaintext)
+
+    # Préparation du payload
+    payload = {
+        **AccountState.session_payload(),
+        "vault_id": target_vault["vault_id"],
+        "item": {
+            "item_id": item_id,
+            "key": raw_item["key"], # même item = même clé
+            "content": new_content_block # maj du contenu seulement
+        }
+    }
+
+    resp = api_post("/item/update", payload)
+    result = handle_resp(resp, context=CTX.ITEM_UPDATE)
+
+    if result is None:
+        notify_user("Failed to update item.")
+        return False
+
+    return True
+
+
+
+
+
+
+
 def list_items(_args):
     if not AccountState.valid():
         print("Please login to list items.")

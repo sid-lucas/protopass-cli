@@ -21,9 +21,10 @@ class LogContext(str, Enum):
     VAULT_SELECT = "Vault Select"
     ITEM_LIST = "Item List"
     ITEM_CREATE = "Item Create"
+    ITEM_UPDATE = "Item Update"
     ITEM_DELETE = "Item Delete"
     ITEM_SELECT = "Item Select"
-    ITEM_SHOW = "Item show"
+    ITEM_SHOW = "Item Show"
     
 
 

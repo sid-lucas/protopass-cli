@@ -278,6 +278,32 @@ def create_item(username):
         data={"item_id": item.get("item_id")}
     )
 
+@app.post("/item/update")
+@require_session
+def update_item(username):
+    data = request.get_json(force=True) or {}
+
+    vault_id = data.get("vault_id")
+    item = data.get("item")
+
+    if not vault_id or not item:
+        return make_resp("error", "Item Update", "missing vault_id or item", 400)
+
+    # add_item remplace l'item si item_id existe déjà
+    try:
+        ok = add_item(username, vault_id, item)
+    except ValueError as e:
+        return make_resp("error", "Item Update", str(e), 400)
+
+    if not ok:
+        return make_resp("error", "Item Update", "unable to update item", 500)
+
+    return make_resp("ok", "Item Update",
+        f"Item '{item.get('item_id')[:8]}...' updated successfully", 200,
+        data={"item_id": item.get("item_id")}
+    )
+
+
 
 
 # ============================================================
