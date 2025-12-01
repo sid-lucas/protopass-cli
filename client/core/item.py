@@ -406,3 +406,49 @@ def edit_item(args):
 
     notify_user(f"Field '{field.value}' updated.")
 
+def delete_item_field(args):
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.ITEM_UPDATE, current_user)
+
+    # Récupérer tous les items du vault courant
+    rows = _fetch_item_rows()
+    if not rows:
+        return
+
+    # Trouver item_id via index fourni
+    item_id, _ = get_id_by_index(args.index, rows, logger=logger)
+    if item_id is None:
+        return
+    
+    # Charger les infos de l'item
+    loaded = _load_item(item_id, logger)
+    if not loaded:
+        return
+    raw_item, item_key, data, target_vault = loaded
+
+    # Vérifier champ
+    try:
+        field = Field(args.field)
+    except ValueError:
+        notify_user(f"Invalid field '{args.field}'.")
+        return
+    if field.value not in data:
+        notify_user(f"Field '{field.value}' does not exist in this item.")
+        return
+
+    # Vérifier required (interdit de supprimer)
+    item_type = Type(data["type"])
+    required_fields = [f.value for f in SCHEMAS[item_type]["required"]]
+
+    if field.value in required_fields:
+        notify_user(f"Field '{field.value}' is required and cannot be deleted.")
+        return
+
+    # Suppression
+    del data[field.value]
+    ok = _save_item(item_id, item_key, data, target_vault, raw_item, logger)
+    if not ok:
+        return
+
+    notify_user(f"Field '{field.value}' deleted.")
+

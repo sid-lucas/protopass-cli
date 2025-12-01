@@ -154,6 +154,11 @@ def build_parser():
     p_item_edit.add_argument("value", help="New value for the field")
     p_item_edit.set_defaults(func=item.edit_item)
 
+    # ====== item delete ======
+    p_item_delete = item_sub.add_parser("delete", help="Delete a field from an item")
+    p_item_delete.add_argument("index", type=int, help="Index of the item")
+    p_item_delete.add_argument("field", help="Field to delete")
+    p_item_delete.set_defaults(func=item.delete_item_field)
 
     return parser
 
