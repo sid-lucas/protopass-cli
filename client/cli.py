@@ -113,7 +113,7 @@ def build_parser():
     p_item_create = item_sub.add_parser("create", help="Create a new item in the selected vault")
     # Required group
     req = p_item_create.add_argument_group("Required")
-    req.add_argument("-t", "--type", required=True, help="Type of item to create (login, card, ...)")
+    req.add_argument("-t", "--type", required=True, help="Type of item to create (login, alias, card, note, identity, other)")
 
     # Common fields group
     common = p_item_create.add_argument_group("Common fields")
