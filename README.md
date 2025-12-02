@@ -3,9 +3,7 @@ Prototype de gestionnaire de mots de passe en ligne de commande, inspiré du mod
 
 TODO :
 - TOTP
-- deletion item
-- update vault/item informations
+- update vault informations
 - alias API simplelogin
 - copy to clipboard
 - (autofill)
-S
