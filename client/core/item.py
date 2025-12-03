@@ -89,7 +89,6 @@ def _fetch_item_rows():
             "uuid": item.get("item_id"),
         })
 
-    logger.info(f"{len(rows)} item(s) retrieved")
     return rows
 
 def _load_item(item_id, logger):
@@ -183,9 +182,11 @@ def list_items(_args):
         print("Please login to list items.")
         return
 
+    logger = log.get_logger(CTX.ITEM_LIST, AccountState.username())
     rows = _fetch_item_rows()
     if not rows:
         return
+    logger.info(f"{len(rows)} item(s) retrieved")
 
     columns = [
         ("idx", "#", 3),
@@ -258,6 +259,7 @@ def show_item(args):
     # Affichage plus lisible (table Field/Value)
     print("\n=== Item details ===")
     print(render_item_details(data))
+    logger.info(f"Item '{item_id[:8]}...' displayed")
 
 def create_item(args):
     logger = log.get_logger(CTX.ITEM_CREATE, AccountState.username())
