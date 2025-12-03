@@ -48,7 +48,7 @@ def api_post(endpoint, payload=None, user=None):
         return None
 
 
-def handle_resp(resp, required_fields=None, context=CTX.NETWORK, user=None):
+def handle_resp(resp, required_fields=None, context=CTX.NETWORK, user=None, suppress_success_log=False):
     """
     Analyse et logue la réponse serveur normalisée.
 
@@ -57,6 +57,7 @@ def handle_resp(resp, required_fields=None, context=CTX.NETWORK, user=None):
         required_fields (list, optional): Liste des champs attendus dans la clé 'data' de la réponse.
         context (str, optional): Contexte pour le logging.
         user (str, optional): Identifiant utilisateur associé à la requête (pour les logs).
+        suppress_success_log (bool, optional): Si True, ne log pas le message de succès.
 
     Returns:
         dict or None: Les données extraites de la réponse si succès et champs requis présents, sinon None.
@@ -85,8 +86,9 @@ def handle_resp(resp, required_fields=None, context=CTX.NETWORK, user=None):
 
     if status == "ok":
         message = payload.get("message", "operation successful")
-        level = logging.DEBUG if payload_context in DEBUG_CONTEXTS else logging.INFO
-        logger.log(level, message)
+        if not suppress_success_log:
+            level = logging.DEBUG if payload_context in DEBUG_CONTEXTS else logging.INFO
+            logger.log(level, message)
         data = payload.get("data", {})
 
         # Vérifie les champs requis uniquement en cas de succès

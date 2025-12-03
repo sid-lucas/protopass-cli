@@ -48,7 +48,7 @@ def _fetch_item_rows():
         return None
 
     # Récupère tous les vaults et trouve celui qui nous intéresse
-    vaults = fetch_vaults(session_payload, current_user, CTX.ITEM_LIST)
+    vaults = fetch_vaults(session_payload, current_user, CTX.ITEM_LIST, suppress_success_log=True)
     target_vault = find_vault_by_id(vaults, vault_id)
     if target_vault is None:
         return None
@@ -58,7 +58,7 @@ def _fetch_item_rows():
     if not items:
         notify_user("No items in this vault.")
         return []
-    
+
     rows = []
     for idx, item in enumerate(items, start=1):
         item_id = item.get("item_id", "unknown")
@@ -89,6 +89,7 @@ def _fetch_item_rows():
             "uuid": item.get("item_id"),
         })
 
+    logger.info(f"{len(rows)} item(s) retrieved")
     return rows
 
 def _load_item(item_id, logger):
