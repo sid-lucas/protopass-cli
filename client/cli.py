@@ -9,6 +9,15 @@ from .utils.logger import notify_user
 HELP_FORMATTER = lambda prog: argparse.HelpFormatter(prog, max_help_position=45, width=120)
 SHELL_RUNNING = False
 
+def _refresh_agent_ttl_if_running():
+    """Ping the agent to refresh its TTL without auto-starting it."""
+    try:
+        agent = AgentClient(autostart=False)
+        if agent.sock_path.exists():
+            agent.status()
+    except Exception:
+        pass
+
 class ShellArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("formatter_class", HELP_FORMATTER)
@@ -23,6 +32,8 @@ def dispatch_command(args, session_valid=None):
     """
     Point d'entrée commun pour exécuter une commande en tenant compte des règles de session.
     """
+    _refresh_agent_ttl_if_running() # action user -> refresh le TTL de l'agent
+
     if not hasattr(args, "func"):
         print("Invalid command. Type 'help' for a list of commands.")
         return
@@ -264,6 +275,7 @@ def start_shell(_args=None):
                 refresh_prompt_user()
 
                 raw_line = input(f"\n{prefix}protopass{suffix}> ").strip()
+                _refresh_agent_ttl_if_running()
                 
                 if not raw_line:
                     continue
