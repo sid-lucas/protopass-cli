@@ -268,9 +268,9 @@ def create_item(args):
         return
 
     # Récupérer la clé du vault
-    vault_key = AccountState.vault_key(vault_id)
+    vault_key = vault.ensure_vault_key(vault_id, logger)
     if vault_key is None:
-        notify_user("Vault key not found. Try to select a vault again.")
+        notify_user("Vault key not available. Try selecting the vault again.")
         return
 
     # Reçoit le type et doit être présent dans l'enum
