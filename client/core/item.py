@@ -48,7 +48,7 @@ def _fetch_item_rows():
         return None
 
     # Récupère tous les vaults et trouve celui qui nous intéresse
-    vaults = fetch_vaults(session_payload, current_user, CTX.ITEM_LIST, suppress_success_log=True)
+    vaults = fetch_vaults(session_payload, current_user, CTX.ITEM_LIST)
     target_vault = find_vault_by_id(vaults, vault_id)
     if target_vault is None:
         return None

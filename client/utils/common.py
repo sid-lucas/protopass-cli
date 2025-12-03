@@ -19,15 +19,9 @@ def get_id_by_index(index: int, rows: list, logger=None):
         logger.error(f"No entry associated with index {index}")
     return None
 
-def fetch_vaults(session_payload, user, context, suppress_success_log=False):
+def fetch_vaults(session_payload, user, context):
     resp = api_post("/vault/list", session_payload, user=user)
-    data = handle_resp(
-        resp,
-        required_fields=["vaults"],
-        context=context,
-        user=user,
-        suppress_success_log=suppress_success_log,
-    )
+    data = handle_resp(resp, required_fields=["vaults"], context=context, user=user)
 
     if data is None:
         return None
