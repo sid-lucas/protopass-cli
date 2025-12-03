@@ -17,5 +17,4 @@ To Add :
 
 To Fix :
 - when creating an item with more field than the "required" and "recommended" ones -> ils sont pas prit en compte...
-- spam log 'session verify' and 'vault list'
 - When 2 interactive shell, if one have a selected vault, and the other delete that vault -> weird state. Need to check state before interaction with this "ghost" vault, and quit if something went wrong.
