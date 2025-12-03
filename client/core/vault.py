@@ -159,7 +159,9 @@ def select_vault(args):
         return
     
     # Maj du vault courant
-    AccountState.set_current_vault(vault_id, vault_name)
+    if not AccountState.set_current_vault(vault_id, vault_name):
+        notify_user("Unable to select vault: secure agent unavailable. Please log in again.")
+        return
 
     notify_user(f"Vault {args.index} [{vault_name}] is now selected.")
 

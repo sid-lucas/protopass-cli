@@ -14,7 +14,7 @@ Garde en mémoire la master_key et exécute les opérations sensibles pour le cl
 # Globales
 APP_DIR = Path.home() / ".protopass"
 SOCK_PATH = APP_DIR / "agent.sock"
-TTL = 600 # 10 minutes d'inactivité = auto-destruction
+TTL = 7 # 10 minutes d'inactivité = auto-destruction
 
 _master_key = None
 _ttl_timer = None
@@ -125,8 +125,6 @@ def _wipe_sensitive_data():
             _master_key[i] = 0
     _master_key = None
 
-    _state["locked"] = True
-
 def _schedule_auto_shutdown(ttl):
     """Planifie un arrêt automatique après TTL secondes."""
     global _ttl_timer
@@ -152,6 +150,8 @@ def _sig(_s,_f):
 
 def _op_status(req):
     """Retourne l'état actuel de l'agent."""
+    # Considère l'appel status comme une activité -> reset le TTL
+    _schedule_auto_shutdown(_state.get("ttl", TTL))
     return {"status": "ok", "data": _state}
 
 def _op_start(req):

@@ -83,7 +83,7 @@ class AccountState:
         # Vérification de l'intégrité du fichier via l'agent
         integrity = data.get("integrity")
         if integrity and "value" in integrity:
-            agent = AgentClient()
+            agent = AgentClient(autostart=False)
             if not agent.status():
                 logger.warning("Agent unavailable for integrity check")
                 cls.clear()
@@ -133,7 +133,7 @@ class AccountState:
     @classmethod
     def _persist_payload(cls, payload, logger):
         """Recalcule l'intégrité et écrit le fichier account_state.json."""
-        agent = AgentClient()
+        agent = AgentClient(autostart=False)
         mac_data = canonical_json(payload).encode()
         mac_resp = agent.hmac(mac_data, logger)
         mac_value = mac_resp.get("hmac") if mac_resp else None
@@ -172,7 +172,7 @@ class AccountState:
     def _persist_current_vault(cls, vault_id: str | None, vault_name: str | None):
         data = cls._read()
         if not data:
-            return
+            return False
 
         payload = {k: v for k, v in data.items() if k != "integrity"}
         if vault_id:
@@ -187,7 +187,7 @@ class AccountState:
 
         username = payload.get("username") or cls._cached_username or ""
         logger = log.get_logger(CTX.ACCOUNT_STATE, username)
-        cls._persist_payload(payload, logger)
+        return cls._persist_payload(payload, logger)
 
     @classmethod
     def clear(cls):
@@ -377,7 +377,7 @@ class AccountState:
     @classmethod
     def decrypt_secret(cls, enc_block_b64):
         """Déchiffre un bloc via l'agent actif."""
-        agent = AgentClient()
+        agent = AgentClient(autostart=False)
 
         resp = agent.decrypt(
             enc_block_b64["enc"],
@@ -391,7 +391,7 @@ class AccountState:
     @classmethod
     def encrypt_secret(cls, plaintext: bytes):
         """Chiffre un bloc via l'agent actif."""
-        agent = AgentClient()
+        agent = AgentClient(autostart=False)
         payload = base64.b64encode(plaintext).decode()
 
         resp = agent.encrypt(payload)
@@ -420,7 +420,7 @@ class AccountState:
             return None
 
         # Vérifie que l'agent est dispo
-        if not AgentClient().status():
+        if not AgentClient(autostart=False).status():
             logger.error("Agent is not running")
             notify_user("Secure agent is not running. Please log in again.")
             return None
@@ -500,7 +500,13 @@ class AccountState:
         cls._current_vault_loaded = True
         cls._current_vault_name = vault_name
         cls._current_vault_name_loaded = True
-        cls._persist_current_vault(vault_id, vault_name)
+        if not cls._persist_current_vault(vault_id, vault_name):
+            cls._current_vault_id = None
+            cls._current_vault_loaded = True
+            cls._current_vault_name = None
+            cls._current_vault_name_loaded = True
+            return False
+        return True
 
     @classmethod
     def clear_current_vault(cls):
@@ -508,7 +514,7 @@ class AccountState:
         cls._current_vault_loaded = True
         cls._current_vault_name = None
         cls._current_vault_name_loaded = True
-        cls._persist_current_vault(None, None)
+        return cls._persist_current_vault(None, None)
 
     @classmethod
     def current_vault(cls):
