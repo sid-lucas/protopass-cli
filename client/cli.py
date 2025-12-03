@@ -7,6 +7,7 @@ from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
 HELP_FORMATTER = lambda prog: argparse.HelpFormatter(prog, max_help_position=45, width=120)
+SHELL_RUNNING = False
 
 class ShellArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
@@ -192,6 +193,12 @@ def main():
     dispatch_command(args)
 
 def start_shell(_args=None):
+    global SHELL_RUNNING
+    if SHELL_RUNNING:
+        notify_user("Interactive shell already running.")
+        return
+    SHELL_RUNNING = True
+
     import shlex
 
     parser = build_parser()
@@ -251,46 +258,49 @@ def start_shell(_args=None):
             prefix = ""
             suffix = ""
 
-    while True:
-        try:
-            refresh_prompt_user()
-
-            raw_line = input(f"\n{prefix}protopass{suffix}> ").strip()
-            
-            if not raw_line:
-                continue
-
-            if raw_line in exit_keywords:
-                break
-
-            if raw_line in help_keywords:
-                parser.print_help()
-                continue
-
-            # Si l'agent a expiré pendant que l'utilisateur saisissait sa commande,
-            # force une vérification avant d'analyser la commande.
-            refresh_prompt_user(force=True)
-
-            args_list = shlex.split(raw_line)
-
+    try:
+        while True:
             try:
-                args = parser.parse_args(args_list)
-            except ValueError as err:
-                print(err)
-                continue
-            except SystemExit:
-                continue
+                refresh_prompt_user()
 
-            dispatch_command(args, session_verified)
-            session_verified = None  # force refreshing prompt next iteration
+                raw_line = input(f"\n{prefix}protopass{suffix}> ").strip()
+                
+                if not raw_line:
+                    continue
 
-        except KeyboardInterrupt:
-            print("\nUse 'q' to quit.")
-        except EOFError:
-            print()
-            break
-        except Exception as err:
-            print(f"[ERROR] {err}")
+                if raw_line in exit_keywords:
+                    break
+
+                if raw_line in help_keywords:
+                    parser.print_help()
+                    continue
+
+                # Si l'agent a expiré pendant que l'utilisateur saisissait sa commande,
+                # force une vérification avant d'analyser la commande.
+                refresh_prompt_user(force=True)
+
+                args_list = shlex.split(raw_line)
+
+                try:
+                    args = parser.parse_args(args_list)
+                except ValueError as err:
+                    print(err)
+                    continue
+                except SystemExit:
+                    continue
+
+                dispatch_command(args, session_verified)
+                session_verified = None  # force refreshing prompt next iteration
+
+            except KeyboardInterrupt:
+                print("\nUse 'q' to quit.")
+            except EOFError:
+                print()
+                break
+            except Exception as err:
+                print(f"[ERROR] {err}")
+    finally:
+        SHELL_RUNNING = False
 
 
 if __name__ == "__main__":
