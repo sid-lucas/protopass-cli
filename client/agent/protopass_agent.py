@@ -14,7 +14,7 @@ Garde en mémoire la master_key et exécute les opérations sensibles pour le cl
 # Globales
 APP_DIR = Path.home() / ".protopass"
 SOCK_PATH = APP_DIR / "agent.sock"
-TTL = 7 # 10 minutes d'inactivité = auto-destruction
+TTL = 600 # 10 minutes d'inactivité = auto-destruction
 
 _master_key = None
 _ttl_timer = None
