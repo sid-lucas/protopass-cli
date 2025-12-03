@@ -20,3 +20,4 @@ To Fix :
 - no vault key fount when : selecting a vault -> quit shell -> get back in shell -> creating new item in vault
 - when creating an item with more field than the "required" and "recommended" ones -> ils sont pas prit en compte...
 - refresh agent TTL when using general command (and not just by using the agent itself)
+- spam log 'session verify' and 'vault list'
