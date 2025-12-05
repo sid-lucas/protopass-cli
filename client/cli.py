@@ -18,7 +18,7 @@ HELP_FORMATTER = WideHelpFormatter
 RAW_HELP_FORMATTER = WideRawHelpFormatter
 SHELL_RUNNING = False
 
-def _add_item_field_flags(parser, include_password_auto=False, action="store"):
+def _add_item_field_flags(parser, include_auto=False, action="store"):
     is_toggle = action == "store_true"
     common_kwargs = {"action": action} if is_toggle else {}
 
@@ -26,8 +26,11 @@ def _add_item_field_flags(parser, include_password_auto=False, action="store"):
     parser.add_argument("-n", "--name", help="Title of the item", **common_kwargs)
     parser.add_argument("-e", "--email", "--username", dest="email", help="Account email or username", **common_kwargs)
     parser.add_argument("-p", "--password", help="Account password", **common_kwargs)
-    if include_password_auto and not is_toggle:
+    if include_auto and not is_toggle:
         parser.add_argument("-pA", "--password-auto", action="store_true", help="Generate strong password automatically")
+    parser.add_argument("--totp", help="TOTP secret (base32)", **common_kwargs)
+    if include_auto and not is_toggle:
+        parser.add_argument("--totp-auto", action="store_true", help="Generate TOTP secret automatically")
     parser.add_argument("-U", "--url", help="Associated website URL", **common_kwargs)
 
     # Extra fields
@@ -179,12 +182,17 @@ def build_parser():
     req.add_argument("-t", "--type", required=True, help="Type of item to create (login, alias, card, note, identity, other)")
 
     # Champs optionnels (mêmes flags que field-add)
-    _add_item_field_flags(p_item_create, include_password_auto=True, action="store")
+    _add_item_field_flags(p_item_create, include_auto=True, action="store")
     p_item_create.set_defaults(func=item.create_item)
 
     # ====== item list ======
     p_item_list = item_sub.add_parser("list", help="List all items in the selected vault")
     p_item_list.set_defaults(func=item.list_items)
+
+    # ====== item totp <idx> ======
+    p_item_totp = item_sub.add_parser("totp", help="Show current TOTP code for an item")
+    p_item_totp.add_argument("index", type=int, help="Index as shown in item list")
+    p_item_totp.set_defaults(func=item.show_item_totp)
 
     # ====== item show <idx> ======
     p_item_show = item_sub.add_parser("show", help="Show item details")
@@ -205,7 +213,7 @@ def build_parser():
         epilog="Example:\nitem field-add 1 --firstname bob -e user@mail.com -pA -U https://example.com --notes \"hello world\""
     )
     p_item_field_add.add_argument("index", type=int, help="Index as shown in item list")
-    _add_item_field_flags(p_item_field_add, include_password_auto=True, action="store")
+    _add_item_field_flags(p_item_field_add, include_auto=True, action="store")
     p_item_field_add.set_defaults(func=item.add_item_field)
 
     # field edit
@@ -218,7 +226,7 @@ def build_parser():
     # field delete
     p_item_field_delete = item_sub.add_parser("field-delete", help="Delete one or more fields from an item (via flags)")
     p_item_field_delete.add_argument("index", type=int, help="Index of the item")
-    _add_item_field_flags(p_item_field_delete, include_password_auto=False, action="store_true")
+    _add_item_field_flags(p_item_field_delete, include_auto=False, action="store_true")
     p_item_field_delete.set_defaults(func=item.delete_item_field)
 
     return parser

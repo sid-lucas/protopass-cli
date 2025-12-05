@@ -1,6 +1,7 @@
 import uuid, json, os, base64
 from datetime import datetime, timezone
-from .item_schema import Type, Field, SCHEMAS, FIELD_MAXLEN
+from .item_schema import Type, Field, SCHEMAS, FIELD_MAXLEN, FIELD_ARG_NAMES
+from . import totp
 from .account_state import AccountState
 from . import vault
 from .generator import PasswordOptions, generate_password
@@ -25,6 +26,34 @@ from ..utils.crypto import (
 # ============================================================
 #  Internal helpers
 # ============================================================
+
+def _collect_cli_field_values(args, allow_auto=False):
+    """
+    Collecte les valeurs fournies via les flags CLI (store) en s'appuyant sur FIELD_ARG_NAMES.
+    """
+    values = {}
+    for field, attr in FIELD_ARG_NAMES.items():
+        val = getattr(args, attr, None)
+        if val is not None:
+            values[field] = val
+    if allow_auto and getattr(args, "password_auto", False):
+        values[Field.PASSWORD] = generate_password(options=PasswordOptions())
+    if allow_auto and getattr(args, "totp_auto", False) and Field.TOTP_SECRET not in values:
+        values[Field.TOTP_SECRET] = totp.generate_secret()
+    return values
+
+def _collect_flagged_fields(args):
+    """
+    Retourne la liste des Field pour lesquels le flag booléen est activé (store_true).
+    """
+    flagged = []
+    for field, attr in FIELD_ARG_NAMES.items():
+        try:
+            if getattr(args, attr, False):
+                flagged.append(field)
+        except Exception:
+            continue
+    return flagged
 
 def _fetch_item_rows():
     """
@@ -290,6 +319,8 @@ def create_item(args):
 
     if getattr(args, "password_auto", False):
         args.password = generate_password(options=PasswordOptions())
+    if getattr(args, "totp_auto", False):
+        args.totp = totp.generate_secret()
     fields = {}
 
     def _label_for(field: Field) -> str:
@@ -297,6 +328,8 @@ def create_item(args):
             return "Item name"
         if field.value == "email":
             return "Account email or username"
+        if field == Field.TOTP_SECRET:
+            return "TOTP secret (base32)"
         if field == Field.CARDNUMBER:
             return "Card number"
         return field.value.replace("_", " ")
@@ -314,7 +347,11 @@ def create_item(args):
             if valid is None:
                 fields[attr] = None
             else:
-                fields[attr] = cli_value.strip()
+                candidate = cli_value.strip()
+                if field == Field.TOTP_SECRET and not totp.validate_secret(candidate):
+                    notify_user("Invalid TOTP secret (must be base32).")
+                    return False
+                fields[attr] = candidate
             return True
 
         fields[attr] = prompt_field(label, max_len, allow_empty, logger)
@@ -445,22 +482,7 @@ def add_item_field(args):
     raw_item, item_key, data, target_vault = loaded
 
     # Collecte des champs fournis via flags (mêmes noms que item create)
-    candidate_values = {
-        Field.NAME: getattr(args, "name", None),
-        Field.EMAIL: getattr(args, "email", None),
-        Field.PASSWORD: getattr(args, "password", None),
-        Field.URL: getattr(args, "url", None),
-        Field.FIRSTNAME: getattr(args, "firstname", None),
-        Field.LASTNAME: getattr(args, "lastname", None),
-        Field.PHONE: getattr(args, "phone", None),
-        Field.NOTES: getattr(args, "notes", None),
-        Field.CARDNUMBER: getattr(args, "cardnumber", None),
-        Field.EXPIRY: getattr(args, "expiry", None),
-        Field.HOLDER: getattr(args, "holder", None),
-        Field.CVV: getattr(args, "cvv", None),
-    }
-    if getattr(args, "password_auto", False):
-        candidate_values[Field.PASSWORD] = generate_password(options=PasswordOptions())
+    candidate_values = _collect_cli_field_values(args, allow_auto=True)
 
     # Préparation affichage propre de l’ajout
     added = []
@@ -476,6 +498,9 @@ def add_item_field(args):
         max_len = FIELD_MAXLEN.get(field)
         if max_len and len(val) > max_len:
             notify_user(f"Value too long for '{field.value}' (max {max_len}).")
+            return
+        if field == Field.TOTP_SECRET and not totp.validate_secret(val):
+            notify_user("Invalid TOTP secret (must be base32).")
             return
         data[field.value] = val
         added.append(field.value)
@@ -561,21 +586,8 @@ def delete_item_field(args):
     raw_item, item_key, data, target_vault = loaded
 
     # Champs ciblés via flags
-    candidate_flags = {
-        Field.NAME: getattr(args, "name", False),
-        Field.EMAIL: getattr(args, "email", False),
-        Field.PASSWORD: getattr(args, "password", False),
-        Field.URL: getattr(args, "url", False),
-        Field.FIRSTNAME: getattr(args, "firstname", False),
-        Field.LASTNAME: getattr(args, "lastname", False),
-        Field.PHONE: getattr(args, "phone", False),
-        Field.NOTES: getattr(args, "notes", False),
-        Field.CARDNUMBER: getattr(args, "cardnumber", False),
-        Field.EXPIRY: getattr(args, "expiry", False),
-        Field.HOLDER: getattr(args, "holder", False),
-        Field.CVV: getattr(args, "cvv", False),
-    }
-    if not any(candidate_flags.values()):
+    flagged_fields = _collect_flagged_fields(args)
+    if not flagged_fields:
         notify_user("No field flag provided to delete.")
         return
 
@@ -588,9 +600,7 @@ def delete_item_field(args):
     skipped_missing = []
 
     # Parcours des flags pour suppression
-    for field, flag in candidate_flags.items():
-        if not flag:
-            continue
+    for field in flagged_fields:
         if field.value not in data:
             skipped_missing.append(field.value)
             continue
@@ -622,3 +632,39 @@ def delete_item_field(args):
     if skipped_missing:
         msg += f"\nNot present: {', '.join(skipped_missing)}."
     notify_user(msg)
+
+
+def show_item_totp(args):
+    current_user = AccountState.username()
+    logger = log.get_logger(CTX.ITEM_SHOW, current_user)
+
+    session_payload = AccountState.session_payload()
+    if session_payload is None:
+        return
+
+    rows = _fetch_item_rows()
+    if not rows:
+        return
+
+    item_id, _ = get_id_by_index(args.index, rows, logger=logger)
+    if item_id is None:
+        return
+
+    loaded = _load_item(item_id, logger)
+    if not loaded:
+        return
+    _, _, data, _ = loaded
+
+    secret = data.get(Field.TOTP_SECRET.value)
+    if not secret:
+        notify_user("No TOTP secret stored for this item.")
+        return
+
+    try:
+        code, remaining = totp.current_code(secret)
+    except Exception as exc:
+        logger.warning(f"Invalid TOTP secret for item '{item_id[:8]}': {exc}")
+        notify_user("Invalid TOTP secret; unable to compute code.")
+        return
+
+    notify_user(f"TOTP code: {code} (expires in {remaining}s).")

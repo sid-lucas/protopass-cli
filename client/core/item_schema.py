@@ -66,3 +66,20 @@ SCHEMAS = {
         "recommended": [],
     },
 }
+
+# Association des champs avec les noms d'arguments CLI
+FIELD_ARG_NAMES = {
+    Field.NAME: "name",
+    Field.EMAIL: "email",
+    Field.PASSWORD: "password",
+    Field.URL: "url",
+    Field.TOTP_SECRET: "totp",
+    Field.FIRSTNAME: "firstname",
+    Field.LASTNAME: "lastname",
+    Field.PHONE: "phone",
+    Field.NOTES: "notes",
+    Field.CARDNUMBER: "cardnumber",
+    Field.EXPIRY: "expiry",
+    Field.HOLDER: "holder",
+    Field.CVV: "cvv",
+}
