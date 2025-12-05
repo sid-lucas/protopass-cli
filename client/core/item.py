@@ -285,6 +285,16 @@ def show_item(args):
     
     data = json.loads(plaintext)
 
+    # Prépare une copie pour l'affichage (totp => code actuel)
+    data = dict(data)
+    secret = data.get(Field.TOTP_SECRET.value)
+    if secret:
+        try:
+            code, remaining = totp.current_code(secret)
+            data[Field.TOTP_SECRET.value] = f"{code} (valid for {remaining}s)"
+        except Exception:
+            data[Field.TOTP_SECRET.value] = "<invalid totp secret>"
+
     # Affichage plus lisible (table Field/Value)
     print("\n=== Item details ===")
     print(render_item_details(data))
