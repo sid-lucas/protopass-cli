@@ -442,29 +442,54 @@ def add_item_field(args):
         return
     raw_item, item_key, data, target_vault = loaded
 
-    # Vérifier le champ fourni
-    try:
-        field = Field(args.field)
-    except ValueError:
-        notify_user(f"Invalid field '{args.field}'.")
-        return
-    if field.value in data:
-        notify_user(f"Field '{field.value}' already exists in this item.")
-        return
+    # Collecte des champs fournis via flags (mêmes noms que item create)
+    candidate_values = {
+        Field.NAME: getattr(args, "name", None),
+        Field.EMAIL: getattr(args, "email", None),
+        Field.PASSWORD: getattr(args, "password", None),
+        Field.URL: getattr(args, "url", None),
+        Field.FIRSTNAME: getattr(args, "firstname", None),
+        Field.LASTNAME: getattr(args, "lastname", None),
+        Field.PHONE: getattr(args, "phone", None),
+        Field.NOTES: getattr(args, "notes", None),
+        Field.CARD_NUMBER: getattr(args, "card_number", None),
+        Field.EXPIRY: getattr(args, "expiry", None),
+        Field.HOLDER: getattr(args, "holder", None),
+        Field.CVV: getattr(args, "cvv", None),
+    }
 
-    # Vérifier longueur max
-    max_len = FIELD_MAXLEN.get(field)
-    if max_len and len(args.value) > max_len:
-        notify_user(f"Value too long for '{field.value}' (max {max_len}).")
-        return
+    if getattr(args, "password_auto", False):
+        candidate_values[Field.PASSWORD] = generate_password(options=PasswordOptions())
 
-    # Mise à jour du champ
-    data[field.value] = args.value
+    added = []
+    skipped = []
+
+    for field, val in candidate_values.items():
+        if val is None:
+            continue
+        if field.value in data:
+            skipped.append(field.value)
+            continue
+        max_len = FIELD_MAXLEN.get(field)
+        if max_len and len(val) > max_len:
+            notify_user(f"Value too long for '{field.value}' (max {max_len}).")
+            return
+        data[field.value] = val
+        added.append(field.value)
+
     ok = _save_item(item_id, item_key, data, target_vault, raw_item, logger)
     if not ok:
         return
 
-    notify_user(f"Field '{field.value}' added.")
+    if added:
+        added_msg = ", ".join(added)
+        notify_user(f"Field(s) added: {added_msg}.")
+    if skipped and not added:
+        skipped_msg = ", ".join(skipped)
+        notify_user(f"No new fields added. Already present: {skipped_msg}.")
+    elif skipped:
+        skipped_msg = ", ".join(skipped)
+        notify_user(f"Skipped existing fields: {skipped_msg}.")
 
 def edit_item_field(args):
     current_user = AccountState.username()

@@ -178,10 +178,31 @@ def build_parser():
 
     # ====== item field management ======
     # field add
-    p_item_field_add = item_sub.add_parser("field-add", help="Add a new field to an item")
+    p_item_field_add = item_sub.add_parser(
+        "field-add",
+        help="Add one or more fields to an item using flags (same as create)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Example:\nitem field-add 1 --firstname bob -e user@mail.com -pA -U https://example.com --notes \"hello world\""
+    )
     p_item_field_add.add_argument("index", type=int, help="Index as shown in item list")
-    p_item_field_add.add_argument("field", help="Field name to add (e.g. name, email, password, url)")
-    p_item_field_add.add_argument("value", help="Value for the new field")
+    # Common fields
+    p_item_field_add.add_argument("-n", "--name", help="Title of the item")
+    p_item_field_add.add_argument("-e", "--email", "--username", dest="email", help="Account email or username")
+    p_item_field_add.add_argument("-p", "--password", help="Account password")
+    p_item_field_add.add_argument("-pA", "--password-auto", action="store_true", help="Generate strong password automatically")
+    p_item_field_add.add_argument("-U", "--url", help="Associated website URL")
+
+    # Extra fields
+    p_item_field_add.add_argument("--firstname", help="First name")
+    p_item_field_add.add_argument("--lastname", help="Last name")
+    p_item_field_add.add_argument("--phone", help="Phone number")
+    p_item_field_add.add_argument("--notes", help="Additional notes")
+
+    # Card-specific
+    p_item_field_add.add_argument("--card-number", help="Card number")
+    p_item_field_add.add_argument("--expiry", help="Expiration date")
+    p_item_field_add.add_argument("--holder", help="Card holder name")
+    p_item_field_add.add_argument("--cvv", help="Security code")
     p_item_field_add.set_defaults(func=item.add_item_field)
 
     # field edit
