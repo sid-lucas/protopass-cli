@@ -326,6 +326,23 @@ def create_item(args):
         if _collect(field, allow_empty=True) is False:
             return
 
+    # Collecte des champs supplémentaires fournis en CLI (hors required/recommended)
+    extra_fields = [f for f in Field if f not in schema["required"] and f not in schema["recommended"]]
+    for field in extra_fields:
+        attr = field.value
+        cli_value = getattr(args, attr, None)
+        if cli_value is None:
+            continue
+        label = _label_for(field)
+        max_len = FIELD_MAXLEN.get(field)
+        valid = verify_prompt(cli_value, label, max_len or len(cli_value), True, logger)
+        if valid is False:
+            return
+        if valid is None:
+            fields[attr] = None
+        else:
+            fields[attr] = cli_value.strip()
+
     # Création du JSON
     now = datetime.now(timezone.utc).isoformat()
     plaintext = {
