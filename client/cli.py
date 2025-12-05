@@ -6,17 +6,29 @@ from .core.item_schema import Field, Type, SCHEMAS
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
-HELP_FORMATTER = lambda prog: argparse.HelpFormatter(prog, max_help_position=45, width=120)
+class WideHelpFormatter(argparse.HelpFormatter):
+    def __init__(self, prog):
+        super().__init__(prog, max_help_position=60, width=160)
+
+class WideRawHelpFormatter(argparse.RawDescriptionHelpFormatter):
+    def __init__(self, prog):
+        super().__init__(prog, max_help_position=60, width=160)
+
+HELP_FORMATTER = WideHelpFormatter
+RAW_HELP_FORMATTER = WideRawHelpFormatter
 SHELL_RUNNING = False
 
 def _item_create_epilog():
     lines = ["Item types and their associated fields:"]
-    pad = max(len(t.value) for t in Type) + 1
+    pad_type = max(len(t.value) for t in Type) + 1
+    req_strings = {t: ", ".join(f.value for f in SCHEMAS[t]["required"]) or "-" for t in Type}
+    pad_req = max(len(req) for req in req_strings.values())
     for t in Type:
-        schema = SCHEMAS[t]
-        req = ", ".join(f.value for f in schema["required"]) or "-"
-        rec = ", ".join(f.value for f in schema["recommended"]) or "-"
-        lines.append(f"- {t.value.ljust(pad)}required [{req}] | recommended [{rec}]")
+        req = req_strings[t]
+        rec = ", ".join(f.value for f in SCHEMAS[t]["recommended"]) or "-"
+        left = f"- {t.value.ljust(pad_type)}required: [{req}]"
+        left = left.ljust(len("- ") + pad_type + len("required: []") + pad_req)
+        lines.append(f"{left} recommended: [{rec}]")
     return "\n".join(lines)
 
 def _refresh_agent_ttl_if_running():
@@ -135,7 +147,7 @@ def build_parser():
     p_item_create = item_sub.add_parser(
         "create",
         help="Create a new item in the selected vault",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=RAW_HELP_FORMATTER,
         epilog=_item_create_epilog(),
     )
     # Required group
@@ -181,7 +193,7 @@ def build_parser():
     p_item_field_add = item_sub.add_parser(
         "field-add",
         help="Add one or more fields to an item using flags (same as create)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=RAW_HELP_FORMATTER,
         epilog="Example:\nitem field-add 1 --firstname bob -e user@mail.com -pA -U https://example.com --notes \"hello world\""
     )
     p_item_field_add.add_argument("index", type=int, help="Index as shown in item list")
