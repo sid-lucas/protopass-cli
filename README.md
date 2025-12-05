@@ -7,9 +7,6 @@ To Add :
 - update vault informations
 - alias API simplelogin
 - copy to clipboard
-- help info that show all the possible type
-- help info that show all the required/recommded field for each type
-- help info that show all the possible fields
 - Show item details more beautifuly (try find inspiration on bitwarden or diskpart or ...)
 - Add possibility to use "item field-add" with multiple fields in one command
 - (autofill)

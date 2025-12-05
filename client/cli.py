@@ -2,12 +2,22 @@ import argparse, os, readline, atexit
 from .core import auth
 from .core import vault
 from .core import item
-from .core.item_schema import Field
+from .core.item_schema import Field, Type, SCHEMAS
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
 
 HELP_FORMATTER = lambda prog: argparse.HelpFormatter(prog, max_help_position=45, width=120)
 SHELL_RUNNING = False
+
+def _item_create_epilog():
+    lines = ["Item types and their associated fields:"]
+    pad = max(len(t.value) for t in Type) + 1
+    for t in Type:
+        schema = SCHEMAS[t]
+        req = ", ".join(f.value for f in schema["required"]) or "-"
+        rec = ", ".join(f.value for f in schema["recommended"]) or "-"
+        lines.append(f"- {t.value.ljust(pad)}required [{req}] | recommended [{rec}]")
+    return "\n".join(lines)
 
 def _refresh_agent_ttl_if_running():
     """Ping the agent to refresh its TTL without auto-starting it."""
@@ -122,7 +132,12 @@ def build_parser():
     p_item.set_defaults(func=lambda args: p_item.print_help())
 
     # ====== item create ======
-    p_item_create = item_sub.add_parser("create", help="Create a new item in the selected vault")
+    p_item_create = item_sub.add_parser(
+        "create",
+        help="Create a new item in the selected vault",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_item_create_epilog(),
+    )
     # Required group
     req = p_item_create.add_argument_group("Required")
     req.add_argument("-t", "--type", required=True, help="Type of item to create (login, alias, card, note, identity, other)")
@@ -141,13 +156,10 @@ def build_parser():
     extra.add_argument("--lastname", help="Last name")
     extra.add_argument("--phone", help="Phone number")
     extra.add_argument("--notes", help="Additional notes")
-
-    # Card-specific group
-    card = p_item_create.add_argument_group("Card fields")
-    card.add_argument("--card-number", help="Card number")
-    card.add_argument("--expiry", help="Expiration date")
-    card.add_argument("--holder", help="Card holder name")
-    card.add_argument("--cvv", help="Security code")
+    extra.add_argument("--card-number", help="Card number")
+    extra.add_argument("--expiry", help="Expiration date")
+    extra.add_argument("--holder", help="Card holder name")
+    extra.add_argument("--cvv", help="Security code")
     p_item_create.set_defaults(func=item.create_item)
 
     # ====== item list ======
