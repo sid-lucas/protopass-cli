@@ -168,7 +168,7 @@ def build_parser():
     extra.add_argument("--lastname", help="Last name")
     extra.add_argument("--phone", help="Phone number")
     extra.add_argument("--notes", help="Additional notes")
-    extra.add_argument("--card-number", help="Card number")
+    extra.add_argument("--cardnumber", help="Card number")
     extra.add_argument("--expiry", help="Expiration date")
     extra.add_argument("--holder", help="Card holder name")
     extra.add_argument("--cvv", help="Security code")
@@ -211,7 +211,7 @@ def build_parser():
     p_item_field_add.add_argument("--notes", help="Additional notes")
 
     # Card-specific
-    p_item_field_add.add_argument("--card-number", help="Card number")
+    p_item_field_add.add_argument("--cardnumber", help="Card number")
     p_item_field_add.add_argument("--expiry", help="Expiration date")
     p_item_field_add.add_argument("--holder", help="Card holder name")
     p_item_field_add.add_argument("--cvv", help="Security code")

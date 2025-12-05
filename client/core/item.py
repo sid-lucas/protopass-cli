@@ -297,6 +297,8 @@ def create_item(args):
             return "Item name"
         if field.value == "email":
             return "Account email or username"
+        if field == Field.CARDNUMBER:
+            return "Card number"
         return field.value.replace("_", " ")
 
     def _collect(field: Field, allow_empty: bool) -> bool:
@@ -452,7 +454,7 @@ def add_item_field(args):
         Field.LASTNAME: getattr(args, "lastname", None),
         Field.PHONE: getattr(args, "phone", None),
         Field.NOTES: getattr(args, "notes", None),
-        Field.CARD_NUMBER: getattr(args, "card_number", None),
+        Field.CARDNUMBER: getattr(args, "cardnumber", None),
         Field.EXPIRY: getattr(args, "expiry", None),
         Field.HOLDER: getattr(args, "holder", None),
         Field.CVV: getattr(args, "cvv", None),

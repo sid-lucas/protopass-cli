@@ -16,7 +16,7 @@ class Field(str, Enum):
     URL = "url"
     BODY = "body"
     NOTES = "notes"
-    CARD_NUMBER = "card_number"
+    CARDNUMBER = "cardnumber"
     EXPIRY = "expiry"
     HOLDER = "holder"
     CVV = "cvv"
@@ -31,7 +31,7 @@ FIELD_MAXLEN = {
     Field.TOTP_SECRET: 100,
     Field.URL: 200,
     Field.NOTES: 1000,
-    Field.CARD_NUMBER: 20,
+    Field.CARDNUMBER: 20,
     Field.EXPIRY: 10,
     Field.HOLDER: 50,
     Field.CVV: 4,
@@ -54,7 +54,7 @@ SCHEMAS = {
         "recommended": [Field.EMAIL, Field.NOTES],
     },
     Type.CARD: {
-        "required": [Field.NAME, Field.CARD_NUMBER],
+        "required": [Field.NAME, Field.CARDNUMBER],
         "recommended": [Field.EXPIRY, Field.HOLDER, Field.CVV],
     },
     Type.IDENTITY: {
