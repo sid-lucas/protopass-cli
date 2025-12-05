@@ -18,6 +18,30 @@ HELP_FORMATTER = WideHelpFormatter
 RAW_HELP_FORMATTER = WideRawHelpFormatter
 SHELL_RUNNING = False
 
+def _add_item_field_flags(parser, include_password_auto=False, action="store"):
+    is_toggle = action == "store_true"
+    common_kwargs = {"action": action} if is_toggle else {}
+
+    # Common fields group
+    parser.add_argument("-n", "--name", help="Title of the item", **common_kwargs)
+    parser.add_argument("-e", "--email", "--username", dest="email", help="Account email or username", **common_kwargs)
+    parser.add_argument("-p", "--password", help="Account password", **common_kwargs)
+    if include_password_auto and not is_toggle:
+        parser.add_argument("-pA", "--password-auto", action="store_true", help="Generate strong password automatically")
+    parser.add_argument("-U", "--url", help="Associated website URL", **common_kwargs)
+
+    # Extra fields
+    parser.add_argument("--firstname", help="First name", **common_kwargs)
+    parser.add_argument("--lastname", help="Last name", **common_kwargs)
+    parser.add_argument("--phone", help="Phone number", **common_kwargs)
+    parser.add_argument("--notes", help="Additional notes", **common_kwargs)
+
+    # Card-specific
+    parser.add_argument("--cardnumber", help="Card number", **common_kwargs)
+    parser.add_argument("--expiry", help="Expiration date", **common_kwargs)
+    parser.add_argument("--holder", help="Card holder name", **common_kwargs)
+    parser.add_argument("--cvv", help="Security code", **common_kwargs)
+
 def _item_create_epilog():
     lines = ["Item types and their associated fields:"]
     pad_type = max(len(t.value) for t in Type) + 1
@@ -154,24 +178,8 @@ def build_parser():
     req = p_item_create.add_argument_group("Required")
     req.add_argument("-t", "--type", required=True, help="Type of item to create (login, alias, card, note, identity, other)")
 
-    # Common fields group
-    common = p_item_create.add_argument_group("Common fields")
-    common.add_argument("-n", "--name", help="Title of the item")
-    common.add_argument("-e", "--email", "--username", dest="email", help="Account email or username")
-    common.add_argument("-p", "--password", help="Account password")
-    common.add_argument("-pA", "--password-auto", action="store_true", help="Generate strong password automatically")
-    common.add_argument("-U", "--url", help="Associated website URL")
-
-    # Extra fields group
-    extra = p_item_create.add_argument_group("Extra fields")
-    extra.add_argument("--firstname", help="First name")
-    extra.add_argument("--lastname", help="Last name")
-    extra.add_argument("--phone", help="Phone number")
-    extra.add_argument("--notes", help="Additional notes")
-    extra.add_argument("--cardnumber", help="Card number")
-    extra.add_argument("--expiry", help="Expiration date")
-    extra.add_argument("--holder", help="Card holder name")
-    extra.add_argument("--cvv", help="Security code")
+    # Champs optionnels (mêmes flags que field-add)
+    _add_item_field_flags(p_item_create, include_password_auto=True, action="store")
     p_item_create.set_defaults(func=item.create_item)
 
     # ====== item list ======
@@ -197,24 +205,7 @@ def build_parser():
         epilog="Example:\nitem field-add 1 --firstname bob -e user@mail.com -pA -U https://example.com --notes \"hello world\""
     )
     p_item_field_add.add_argument("index", type=int, help="Index as shown in item list")
-    # Common fields
-    p_item_field_add.add_argument("-n", "--name", help="Title of the item")
-    p_item_field_add.add_argument("-e", "--email", "--username", dest="email", help="Account email or username")
-    p_item_field_add.add_argument("-p", "--password", help="Account password")
-    p_item_field_add.add_argument("-pA", "--password-auto", action="store_true", help="Generate strong password automatically")
-    p_item_field_add.add_argument("-U", "--url", help="Associated website URL")
-
-    # Extra fields
-    p_item_field_add.add_argument("--firstname", help="First name")
-    p_item_field_add.add_argument("--lastname", help="Last name")
-    p_item_field_add.add_argument("--phone", help="Phone number")
-    p_item_field_add.add_argument("--notes", help="Additional notes")
-
-    # Card-specific
-    p_item_field_add.add_argument("--cardnumber", help="Card number")
-    p_item_field_add.add_argument("--expiry", help="Expiration date")
-    p_item_field_add.add_argument("--holder", help="Card holder name")
-    p_item_field_add.add_argument("--cvv", help="Security code")
+    _add_item_field_flags(p_item_field_add, include_password_auto=True, action="store")
     p_item_field_add.set_defaults(func=item.add_item_field)
 
     # field edit
@@ -225,9 +216,9 @@ def build_parser():
     p_item_field_edit.set_defaults(func=item.edit_item_field)
 
     # field delete
-    p_item_field_delete = item_sub.add_parser("field-delete", help="Delete a field from an item")
+    p_item_field_delete = item_sub.add_parser("field-delete", help="Delete one or more fields from an item (via flags)")
     p_item_field_delete.add_argument("index", type=int, help="Index of the item")
-    p_item_field_delete.add_argument("field", help="Field to delete")
+    _add_item_field_flags(p_item_field_delete, include_password_auto=False, action="store_true")
     p_item_field_delete.set_defaults(func=item.delete_item_field)
 
     return parser

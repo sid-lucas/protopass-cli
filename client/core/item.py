@@ -459,13 +459,14 @@ def add_item_field(args):
         Field.HOLDER: getattr(args, "holder", None),
         Field.CVV: getattr(args, "cvv", None),
     }
-
     if getattr(args, "password_auto", False):
         candidate_values[Field.PASSWORD] = generate_password(options=PasswordOptions())
 
+    # Préparation affichage propre de l’ajout
     added = []
     skipped = []
 
+    # Parcours des champs candidats pour ajout
     for field, val in candidate_values.items():
         if val is None:
             continue
@@ -479,10 +480,12 @@ def add_item_field(args):
         data[field.value] = val
         added.append(field.value)
 
+    # Sauvegarde de l'item modifié
     ok = _save_item(item_id, item_key, data, target_vault, raw_item, logger)
     if not ok:
         return
 
+    # Affichage du résumé des ajouts
     if added:
         added_msg = ", ".join(added)
         notify_user(f"Field(s) added: {added_msg}.")
@@ -557,28 +560,65 @@ def delete_item_field(args):
         return
     raw_item, item_key, data, target_vault = loaded
 
-    # Vérifier champ
-    try:
-        field = Field(args.field)
-    except ValueError:
-        notify_user(f"Invalid field '{args.field}'.")
-        return
-    if field.value not in data:
-        notify_user(f"Field '{field.value}' does not exist in this item.")
+    # Champs ciblés via flags
+    candidate_flags = {
+        Field.NAME: getattr(args, "name", False),
+        Field.EMAIL: getattr(args, "email", False),
+        Field.PASSWORD: getattr(args, "password", False),
+        Field.URL: getattr(args, "url", False),
+        Field.FIRSTNAME: getattr(args, "firstname", False),
+        Field.LASTNAME: getattr(args, "lastname", False),
+        Field.PHONE: getattr(args, "phone", False),
+        Field.NOTES: getattr(args, "notes", False),
+        Field.CARDNUMBER: getattr(args, "cardnumber", False),
+        Field.EXPIRY: getattr(args, "expiry", False),
+        Field.HOLDER: getattr(args, "holder", False),
+        Field.CVV: getattr(args, "cvv", False),
+    }
+    if not any(candidate_flags.values()):
+        notify_user("No field flag provided to delete.")
         return
 
-    # Vérifier required (interdit de supprimer)
     item_type = Type(data["type"])
-    required_fields = [f.value for f in SCHEMAS[item_type]["required"]]
+    required_fields = {f.value for f in SCHEMAS[item_type]["required"]}
 
-    if field.value in required_fields:
-        notify_user(f"Field '{field.value}' is required and cannot be deleted.")
+    # Préparation affichage propre de la suppression
+    deleted = []
+    skipped_required = []
+    skipped_missing = []
+
+    # Parcours des flags pour suppression
+    for field, flag in candidate_flags.items():
+        if not flag:
+            continue
+        if field.value not in data:
+            skipped_missing.append(field.value)
+            continue
+        if field.value in required_fields:
+            skipped_required.append(field.value)
+            continue
+        del data[field.value]
+        deleted.append(field.value)
+
+    # Si rien de supprimé -> message adapté
+    if not deleted:
+        if skipped_required:
+            notify_user(f"No fields deleted. Required fields cannot be removed: {', '.join(skipped_required)}.")
+        elif skipped_missing:
+            notify_user(f"No fields deleted. Not present: {', '.join(skipped_missing)}.")
+        else:
+            notify_user("No fields deleted.")
         return
 
-    # Suppression
-    del data[field.value]
+    # Sauvegarde de l'item modifié
     ok = _save_item(item_id, item_key, data, target_vault, raw_item, logger)
     if not ok:
         return
 
-    notify_user(f"Field '{field.value}' deleted.")
+    # Affichage du résumé des suppressions
+    msg = f"Deleted: {', '.join(deleted)}."
+    if skipped_required:
+        msg += f"\nSkipped required: {', '.join(skipped_required)}."
+    if skipped_missing:
+        msg += f"\nNot present: {', '.join(skipped_missing)}."
+    notify_user(msg)
