@@ -243,6 +243,7 @@ def build_parser():
     p_sl.set_defaults(func=lambda args: p_sl.print_help())
     # simplelogin set-key
     p_sl_setkey = sl_sub.add_parser("set-key", help="Set the SimpleLogin API key")
+    p_sl_setkey.add_argument("api_key", nargs="?", help="SimpleLogin API key (optional, will prompt if omitted)")
     p_sl_setkey.set_defaults(func=sl.prompt_set_api_key)
 
     return parser

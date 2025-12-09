@@ -39,9 +39,14 @@ def set_api_key(api_key: str):
     return True
 
 
-def prompt_set_api_key(_args=None):
-    """Demande la clé SimpleLogin en entrée cachée et la stocke chiffrée."""
-    api_key = getpass.getpass("Enter SimpleLogin API key: ")
+def prompt_set_api_key(args=None):
+    """
+    Demande la clé SimpleLogin en entrée cachée et la stocke chiffrée.
+    Si une valeur est fournie en argument, elle est utilisée directement.
+    """
+    # Vérifie si une clé est fournie en argument ou si on passe en prompt interactif
+    provided = getattr(args, "api_key", None) if args else None
+    api_key = provided or getpass.getpass("Enter SimpleLogin API key: ")
     if not api_key:
         notify_user("No API key provided.")
         return
