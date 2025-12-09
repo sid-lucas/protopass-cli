@@ -43,8 +43,9 @@ class AccountState:
 
     # Champs mémoire volatile (non sauvegardés) utile pour le shell interactif
     _cached_username = None  # Pour des questions de performance (évite de relire le fichier à chaque fois)
-    _cached_session_id = None  # idem
-    _cached_public_key = None  # idem
+    _cached_session_id = None  # Pour des questions de performance
+    _cached_integrations = {} # Cache mémoire des intégrations chargées
+    _cached_public_key = None  # Pour des questions de performance
     _private_key = None  # Pour des questions de sécurité
     _vault_keys = {}  # Cache mémoire des clés de vault déchiffrées
 
@@ -161,6 +162,7 @@ class AccountState:
     def _reset_session_cache(cls):
         cls._last_session_valid = None
         cls._last_session_check = 0.0
+        cls.clear_cached_integrations()
 
     @classmethod
     def _remember_session_status(cls, status: bool):
@@ -203,6 +205,7 @@ class AccountState:
         cls._current_vault_name = None
         cls._current_vault_name_loaded = False
         cls._reset_session_cache()
+        cls.clear_cached_integrations()
 
     # ============================================================
     # Gestion de session et récupération des infos utilisateur
@@ -461,6 +464,21 @@ class AccountState:
             def _set_session(plaintext):
                 cls.set_session_id(plaintext.decode())
             _maybe_load("session", _set_session)
+
+    # ============================================================
+    # Gestion des intégrations (cache RAM uniquement)
+    # ============================================================
+    @classmethod
+    def set_cached_integrations(cls, data: dict):
+        cls._cached_integrations = dict(data)
+
+    @classmethod
+    def get_cached_integrations(cls) -> dict:
+        return dict(cls._cached_integrations)
+
+    @classmethod
+    def clear_cached_integrations(cls):
+        cls._cached_integrations.clear()
 
     # ============================================================
     # Gestion des vaults (cache mémoire uniquement)
