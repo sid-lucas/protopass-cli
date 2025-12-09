@@ -248,6 +248,9 @@ def build_parser():
     # simplelogin delete-key
     p_sl_delkey = sl_sub.add_parser("delete-key", help="Delete the SimpleLogin API key")
     p_sl_delkey.set_defaults(func=lambda _args: sl.clear_api_key())
+    # simplelogin list-mailboxes
+    p_sl_list_mbx = sl_sub.add_parser("list-mailboxes", help="List SimpleLogin mailboxes")
+    p_sl_list_mbx.set_defaults(func=sl.list_mailboxes)
 
     return parser
 
