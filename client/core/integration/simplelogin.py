@@ -99,6 +99,10 @@ def list_mailboxes(_args=None):
     """
     Liste les mailboxes disponibles via l'API SimpleLogin.
     """
+    # Recharge le bloc d'intégrations si le cache est vide (nouveau process CLI)
+    if not integrations.get_cached():
+        integrations.load_all()
+
     api_key = get_api_key()
     if not api_key:
         notify_user("No SimpleLogin API key configured.\nUse: integration simplelogin set-key <api_key>")

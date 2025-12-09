@@ -11,20 +11,26 @@ def load_all():
     Récupère le blob chiffré des intégrations, le déchiffre via l'agent
     et alimente le cache en RAM (AccountState).
     """
-    session_payload = AccountState.session_payload()
-    if session_payload is None:
-        return
-
     current_user = AccountState.username()
     logger = log.get_logger(CTX.INTEGRATIONS, current_user)
 
-    # Récupère le bloc chiffré depuis le serveur
-    data = handle_resp(
-        api_post("/integrations/get", session_payload, user=current_user),
-        context=CTX.INTEGRATIONS,
-        user=current_user,
-    )
-    block = data.get("integrations") if data else None
+    # 1) Tente d'utiliser le bloc chiffré local si présent
+    block = AccountState.integrations_block()
+
+    # 2) Sinon, récupère le bloc chiffré depuis le serveur
+    if block is None:
+        session_payload = AccountState.session_payload()
+        if session_payload is None:
+            return
+        data = handle_resp(
+            api_post("/integrations/get", session_payload, user=current_user),
+            context=CTX.INTEGRATIONS,
+            user=current_user,
+        )
+        block = data.get("integrations") if data else None
+        # Persist localement le bloc chiffré reçu (pour éviter re-fetch)
+        if block:
+            AccountState.set_integrations_block(block)
 
     # Aucun bloc => pas d'intégrations configurées
     if not block:
@@ -108,9 +114,9 @@ def update_all(integrations: dict) -> bool:
         return False
 
     AccountState.set_cached_integrations(integrations)
+    AccountState.set_integrations_block(block)
     return True
 
 
 def get_cached() -> dict:
     return AccountState.get_cached_integrations()
-

@@ -48,6 +48,7 @@ class AccountState:
     _cached_public_key = None  # Pour des questions de performance
     _private_key = None  # Pour des questions de sécurité
     _vault_keys = {}  # Cache mémoire des clés de vault déchiffrées
+    _integrations_block = None  # Bloc chiffré des intégrations (persisté)
 
     # Cache de l'id de vault sélectionné, et flag si l'id a besoin d'être loadé du disk (pour CLI)
     _current_vault_id = None
@@ -479,6 +480,38 @@ class AccountState:
     @classmethod
     def clear_cached_integrations(cls):
         cls._cached_integrations.clear()
+
+    # ============================================================
+    # Bloc chiffré des intégrations (persisté dans account_state.json)
+    # ============================================================
+    @classmethod
+    def set_integrations_block(cls, block: dict | None):
+        """
+        Enregistre le bloc chiffré des intégrations (tel que reçu du serveur) dans account_state.json.
+        """
+        data = cls._read()
+        if data is None:
+            return False
+
+        payload = {k: v for k, v in data.items() if k != "integrity"}
+        if block:
+            payload["integrations"] = block
+        else:
+            payload.pop("integrations", None)
+
+        username = payload.get("username") or cls._cached_username or ""
+        logger = log.get_logger(CTX.ACCOUNT_STATE, username)
+        return cls._persist_payload(payload, logger)
+
+    @classmethod
+    def integrations_block(cls):
+        """
+        Retourne le bloc chiffré des intégrations stocké localement (sans déchiffrer).
+        """
+        data = cls._read()
+        if not data:
+            return None
+        return data.get("integrations")
 
     # ============================================================
     # Gestion des vaults (cache mémoire uniquement)
