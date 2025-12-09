@@ -25,6 +25,8 @@ class LogContext(str, Enum):
     ITEM_DELETE = "Item Delete"
     ITEM_SELECT = "Item Select"
     ITEM_SHOW = "Item Show"
+    INTEGRATIONS = "Integrations"
+    SIMPLELOGIN = "SimpleLogin"
     
 
 
