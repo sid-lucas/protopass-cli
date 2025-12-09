@@ -2,6 +2,7 @@ import argparse, os, readline, atexit
 from .core import auth
 from .core import vault
 from .core import item
+from .core.integration import simplelogin as sl
 from .core.item_schema import Field, Type, SCHEMAS
 from .utils.agent_client import AgentClient
 from .utils.logger import notify_user
@@ -228,6 +229,21 @@ def build_parser():
     p_item_field_delete.add_argument("index", type=int, help="Index of the item")
     _add_item_field_flags(p_item_field_delete, include_auto=False, action="store_true")
     p_item_field_delete.set_defaults(func=item.delete_item_field)
+
+    # ============================================================
+    # Commandes integrations
+    # ============================================================
+    p_integration = subparsers.add_parser("integration", help="Manage integrations")
+    integration_sub = p_integration.add_subparsers(dest="integration_command", parser_class=ShellArgumentParser)
+    p_integration.set_defaults(func=lambda args: p_integration.print_help())
+
+    # ------- SimpleLogin -------
+    p_sl = integration_sub.add_parser("simplelogin", help="SimpleLogin integration")
+    sl_sub = p_sl.add_subparsers(dest="simplelogin_command", parser_class=ShellArgumentParser)
+    p_sl.set_defaults(func=lambda args: p_sl.print_help())
+    # simplelogin set-key
+    p_sl_setkey = sl_sub.add_parser("set-key", help="Set the SimpleLogin API key")
+    p_sl_setkey.set_defaults(func=sl.prompt_set_api_key)
 
     return parser
 
