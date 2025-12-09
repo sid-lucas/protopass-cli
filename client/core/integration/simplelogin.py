@@ -52,3 +52,24 @@ def prompt_set_api_key(args=None):
         return
     if set_api_key(api_key):
         notify_user("SimpleLogin API key updated.")
+
+
+def clear_api_key():
+    """
+    Supprime la clé SimpleLogin de l'utilisateur et nettoie le bloc d'intégrations.
+    """
+    integrations.load_all()
+    data = integrations.get_cached()
+
+    if "simplelogin" not in data:
+        notify_user("No SimpleLogin API key to remove.")
+        return False
+
+    data.pop("simplelogin", None)
+
+    if integrations.update_all(data):
+        notify_user("SimpleLogin API key removed.")
+        return True
+
+    notify_user("Failed to remove SimpleLogin API key.")
+    return False

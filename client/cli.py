@@ -246,6 +246,9 @@ def build_parser():
     p_sl_setkey.add_argument("api_key", nargs="?", help="SimpleLogin API key (optional, will prompt if omitted)")
     p_sl_setkey.set_defaults(func=sl.prompt_set_api_key)
 
+    p_sl_delkey = sl_sub.add_parser("delete-key", help="Delete the SimpleLogin API key")
+    p_sl_delkey.set_defaults(func=lambda _args: sl.clear_api_key())
+
     return parser
 
 
