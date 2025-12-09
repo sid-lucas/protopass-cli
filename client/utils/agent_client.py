@@ -44,6 +44,7 @@ class AgentClient:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 cwd=Path(__file__).resolve().parents[2],  # run from repository root
+                start_new_session=True,  # keep agent alive if parent receives SIGINT (Ctrl+C)
             )
         except Exception as exc:
             raise RuntimeError(f"Unable to spawn agent daemon: {exc}") from exc
