@@ -2,7 +2,12 @@ import base64, srp
 from flask import Flask, request
 from functools import wraps
 from server.utils.response import make_resp
-from server.user_store import add_user, get_user
+from server.user_store import (
+    add_user,
+    get_user,
+    get_integrations,
+    set_integrations,
+)
 from server.session_store import create_session, revoke_session, is_valid, get_session
 from server.vault_store import (
     get_user_vaults,
@@ -206,6 +211,39 @@ def get_userkey(username):
 
     return make_resp("ok", "User key", "user key retrieved", 200,
         data={"user_key": user["user_key"]}
+    )
+
+@app.post("/integrations/get")
+@require_session
+def integrations_get(username):
+    """
+    Retourne le bloc chiffré des intégrations (opaque pour le serveur).
+    """
+    block = get_integrations(username)
+    # block peut être None si aucune intégration
+    return make_resp("ok", "Integrations get", "integrations retrieved", 200,
+        data={"integrations": block}
+    )
+
+
+@app.post("/integrations/set")
+@require_session
+def integrations_set(username):
+    """
+    Enregistre le bloc chiffré des intégrations (opaque).
+    """
+    data = request.get_json(force=True) or {}
+    block = data.get("integrations")
+    if not block:
+        return make_resp("error", "Integrations set", "missing integrations block", 400)
+
+    try:
+        set_integrations(username, block)
+    except ValueError as e:
+        return make_resp("error", "Integrations set", str(e), 400)
+
+    return make_resp("ok", "Integrations set", "integrations updated", 200,
+        data={"integrations": True}
     )
 
 # ---------- Vault ----------

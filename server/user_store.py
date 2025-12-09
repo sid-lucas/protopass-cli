@@ -51,3 +51,31 @@ def add_user(username: str, salt_b64: str, vkey_b64: str,
 
     _save(data)
     return True
+
+# intégrations chiffrées (blob opaque)
+def get_integrations(username: str):
+    data = _load()
+    user = data.get(username) or {}
+    return user.get("integrations")
+
+def set_integrations(username: str, block: dict):
+    if not isinstance(block, dict):
+        raise ValueError("integrations block must be a dict")
+
+    required = {"data", "nonce", "tag"}
+    if not required.issubset(block.keys()):
+        raise ValueError("missing fields in integrations block")
+
+    data = _load()
+    if username not in data:
+        raise ValueError("user not found")
+
+    user = data[username]
+    user["integrations"] = {
+        "data": block["data"],
+        "nonce": block["nonce"],
+        "tag": block["tag"],
+    }
+
+    _save(data)
+    return True
