@@ -1,10 +1,15 @@
-import getpass, os, requests
+import getpass, os, requests, json, uuid
+from datetime import datetime, timezone
 from . import integrations
+from .. import vault
 from ..account_state import AccountState
+from ..item_schema import Type
 from ...utils import logger as log
 from ...utils.logger import CTX, notify_user
+from ...utils.crypto import encrypt_b64_block
+from ...utils.network import api_post, handle_resp
 
-SIMPLELOGIN_API_URL = os.getenv("SIMPLELOGIN_API_URL", "https://api.simplelogin.io/api/v2")
+SIMPLELOGIN_API_URL = os.getenv("SIMPLELOGIN_API_URL", "https://api.simplelogin.io")
 
 def _api_headers(api_key: str) -> dict:
     return {
@@ -95,11 +100,69 @@ def clear_api_key():
     return False
 
 
-def list_mailboxes(_args=None):
+def _create_alias_item(alias_email: str, alias_id: str | None, note: str | None):
     """
-    Liste les mailboxes disponibles via l'API SimpleLogin.
+    Crée un item de type alias dans le vault courant avec les champs essentiels.
     """
-    # Recharge le bloc d'intégrations si le cache est vide (nouveau process CLI)
+    logger = log.get_logger(CTX.ITEM_CREATE, AccountState.username())
+
+    vault_id = AccountState.current_vault()
+    if not vault_id:
+        notify_user("No vault selected. Use: vault select <index>.")
+        return False
+
+    vault_key = vault.ensure_vault_key(vault_id, logger)
+    if vault_key is None:
+        notify_user("Vault key not available. Try selecting the vault again.")
+        return False
+
+    now = datetime.now(timezone.utc).isoformat()
+    plaintext = {
+        "type": Type.ALIAS.value,
+        "name": alias_email,
+        "email": alias_email,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if note:
+        plaintext["notes"] = note
+    if alias_id:
+        plaintext["alias_id"] = alias_id
+
+    plaintext_json = json.dumps(plaintext).encode()
+
+    item_id = str(uuid.uuid4())
+    item_key = os.urandom(32)
+
+    key_block = encrypt_b64_block(vault_key, item_key)
+    content_block = encrypt_b64_block(item_key, plaintext_json)
+
+    payload = {
+        **AccountState.session_payload(),
+        "vault_id": vault_id,
+        "item": {
+            "item_id": item_id,
+            "key": key_block,
+            "content": content_block
+        }
+    }
+    resp = api_post("/item/create", payload)
+    data = handle_resp(resp, required_fields=["item_id"], context=CTX.ITEM_CREATE)
+
+    if data is None:
+        notify_user("Alias creation failed.")
+        return False
+
+    notify_user(f"Alias '{alias_email}' created in vault.")
+    return True
+
+
+def create_alias(_args=None):
+    """
+    Crée un alias SimpleLogin aléatoire via /api/alias/random/new
+    et le stocke comme item alias (alias, alias_id).
+    """
+    # Recharge le bloc d'intégrations si nécessaire
     if not integrations.get_cached():
         integrations.load_all()
 
@@ -113,41 +176,40 @@ def list_mailboxes(_args=None):
         return
 
     logger = log.get_logger(CTX.SIMPLELOGIN, AccountState.username())
-    url = _build_url("mailboxes")
+
+    url = _build_url("api/alias/random/new")
+    payload = {}
 
     try:
-        resp = requests.get(url, headers=_api_headers(api_key), timeout=10)
+        resp = requests.post(url, headers=_api_headers(api_key), json=payload, timeout=10)
     except Exception as exc:
         logger.error(f"Failed to contact SimpleLogin API: {exc}")
         notify_user("Unable to reach SimpleLogin API.")
         return
 
-    if resp.status_code != 200:
-        logger.error(f"SimpleLogin mailboxes failed with HTTP {resp.status_code}: {resp.text}")
-        notify_user("Failed to list mailboxes. Check your API key.")
+    if resp.status_code not in (200, 201):
+        logger.error(f"SimpleLogin create alias failed with HTTP {resp.status_code}: {resp.text}")
+        notify_user(f"Failed to create alias on SimpleLogin (HTTP {resp.status_code}).")
         return
 
     try:
-        payload = resp.json()
+        data = resp.json()
     except Exception as exc:
-        logger.error(f"Invalid JSON from SimpleLogin: {exc}")
+        logger.error(f"Invalid JSON from SimpleLogin create alias: {exc}")
         notify_user("Failed to parse SimpleLogin response.")
         return
 
-    mailboxes = payload.get("mailboxes")
-    if mailboxes is None:
-        # fallback if API returns a list directly
-        mailboxes = payload if isinstance(payload, list) else []
+    alias_email = None
+    alias_id = None
+    if isinstance(data, dict):
+        alias_email = data.get("email") or data.get("alias")
+        alias_id = data.get("id")
+        if not alias_email and isinstance(data.get("alias"), dict):
+            alias_email = data["alias"].get("email")
+            alias_id = data["alias"].get("id", alias_id)
 
-    if not mailboxes:
-        notify_user("No mailboxes found on SimpleLogin.")
+    if not alias_email:
+        notify_user("SimpleLogin did not return an alias email.")
         return
 
-    print("Mailboxes:")
-    for mbox in mailboxes:
-        mid = mbox.get("id", "-")
-        email = mbox.get("email", "-")
-        name = mbox.get("name") or mbox.get("label") or ""
-        enabled = mbox.get("enabled")
-        enabled_disp = "enabled" if enabled or enabled is None else "disabled"
-        print(f" - {mid}: {email} {f'({name})' if name else ''} [{enabled_disp}]")
+    _create_alias_item(alias_email, alias_id, None)
