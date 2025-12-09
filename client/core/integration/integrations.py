@@ -1,15 +1,12 @@
-import json, getpass
-from .account_state import AccountState
-from ..utils import logger as log
-from ..utils.logger import CTX, notify_user
-from ..utils.network import api_post, handle_resp
-from ..utils.agent_client import AgentClient
+import json
+from ..account_state import AccountState
+from ...utils import logger as log
+from ...utils.logger import CTX, notify_user
+from ...utils.network import api_post, handle_resp
+from ...utils.agent_client import AgentClient
 
-# ============================================================
-#  Intégration SimpleLogin (bloc chiffré unique)
-# ============================================================
 
-def load_integrations():
+def load_all():
     """
     Récupère le blob chiffré des intégrations, le déchiffre via l'agent
     et alimente le cache en RAM (AccountState).
@@ -69,21 +66,12 @@ def load_integrations():
     AccountState.set_cached_integrations(integrations)
 
 
-def get_simplelogin_api_key():
+def update_all(integrations: dict) -> bool:
     """
-    Retourne la clé SimpleLogin depuis le cache RAM (None si absente).
+    Chiffre et pousse le dictionnaire complet d'intégrations.
     """
-    integrations = AccountState.get_cached_integrations()
-    return integrations.get("simplelogin", {}).get("api_key")
-
-
-def set_simplelogin_api_key(api_key: str):
-    """
-    Met à jour la clé SimpleLogin : recharge les intégrations,
-    modifie le dict, rechiffre et pousse côté serveur.
-    """
-    if not api_key:
-        notify_user("API key cannot be empty.")
+    if not isinstance(integrations, dict):
+        notify_user("Invalid integrations data.")
         return False
 
     session_payload = AccountState.session_payload()
@@ -91,14 +79,7 @@ def set_simplelogin_api_key(api_key: str):
         return False
 
     current_user = AccountState.username()
-    logger = log.get_logger(CTX.SIMPLELOGIN, current_user)
-
-    # Recharge le dernier état serveur pour éviter les collisions
-    load_integrations()
-    integrations = AccountState.get_cached_integrations()
-    simplelogin_data = integrations.get("simplelogin") or {}
-    simplelogin_data["api_key"] = api_key
-    integrations["simplelogin"] = simplelogin_data
+    logger = log.get_logger(CTX.INTEGRATIONS, current_user)
 
     # Chiffre le JSON des intégrations avec la master_key via l'agent
     agent = AgentClient(autostart=False)
@@ -119,22 +100,17 @@ def set_simplelogin_api_key(api_key: str):
     # Push du bloc chiffré côté serveur
     result = handle_resp(
         api_post("/integrations/set", payload, user=current_user),
-        context=CTX.SIMPLELOGIN,
+        context=CTX.INTEGRATIONS,
         user=current_user,
     )
     if result is None:
-        notify_user("Failed to update SimpleLogin API key.")
+        notify_user("Failed to update integrations.")
         return False
 
     AccountState.set_cached_integrations(integrations)
     return True
 
 
-def prompt_simplelogin_api_key(_args=None):
-    """Demande la clé SimpleLogin en entrée cachée et la stocke chiffrée."""
-    api_key = getpass.getpass("Enter SimpleLogin API key: ")
-    if not api_key:
-        notify_user("No API key provided.")
-        return
-    if set_simplelogin_api_key(api_key):
-        notify_user("SimpleLogin API key updated.")
+def get_cached() -> dict:
+    return AccountState.get_cached_integrations()
+

@@ -1,6 +1,7 @@
 import getpass, base64, srp, re, sys
 from Crypto.Hash import SHA256
 from .account_state import AccountState
+from .integration import integrations
 from ..utils import logger as log
 from ..utils.agent_client import AgentClient
 from ..utils.logger import CTX
@@ -285,6 +286,11 @@ def login_account(args):
 
         logger.info(f"User '{username}' successfully logged")
         notify_user(f"Login successful. Welcome {username}!")
+        # Charge les intégrations chiffrées en RAM (si présentes)
+        try:
+            integrations.load_all()
+        except Exception as exc:
+            logger.warning(f"Unable to load integrations: {exc}")
         keep_agent_alive = True
 
     finally:
