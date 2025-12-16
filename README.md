@@ -13,4 +13,3 @@ To Fix :
 ToDo Workflow/Automations :
 - regenerate all the password in a given vault, and putting old password in notes
 - auto creation of an employee with a default vault containing default logins for his company's credentials (mail, vpn, other...)
-- deploy a test environnement with multiples accounts/vaults/items
