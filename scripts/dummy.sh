@@ -6,7 +6,17 @@ set -euo pipefail
 
 CLI="python -m client.cli"
 
-log() { printf "\n[%s] %s\n" "$(date +'%H:%M:%S')" "$*"; }
+# ---------- Helpers d'affichage ----------
+if command -v tput >/dev/null 2>&1; then
+  bold=$(tput bold); red=$(tput setaf 1); green=$(tput setaf 2)
+  yellow=$(tput setaf 3); blue=$(tput setaf 4); reset=$(tput sgr0)
+else
+  bold=""; red=""; green=""; yellow=""; blue=""; reset=""
+fi
+log()  { printf "\n%s[%s]%s %s\n" "$blue" "$(date +'%H:%M:%S')" "$reset" "$*"; }
+info() { printf "%s➜%s %s\n" "$yellow" "$reset" "$*"; }
+ok()   { printf "%s✓%s %s\n" "$green" "$reset" "$*"; }
+err()  { printf "%s✗%s %s\n" "$red" "$reset" "$*"; }
 
 require_login() {
   local user="$1" pass="$2"
@@ -45,7 +55,7 @@ select_vault_by_name() {
   local idx
   idx="$($CLI vault list | awk -v n="$name" '/^[*]?[0-9]+/ {gsub("\\*","",$1); if ($2==n) {print $1; exit}}')"
   if [[ -z "$idx" ]]; then
-    echo "Vault '$name' not found for selection" >&2
+    err "Vault '$name' not found for selection"
     return 1
   fi
   $CLI vault select "$idx"
@@ -77,8 +87,8 @@ create_demo_for_alice() {
   log "[$user] Creating vault 'Work' + items"
   $CLI vault create -n "Work" -d "Accès pro"
   select_vault_by_name "Work"
-  $CLI item create -t login -n "Slack" -e "alice@acme.test" -pA -U "https://slack.com/signin"
-  $CLI item create -t login -n "GitHub" -e "alice@acme.test" -pA -U "https://github.com" --totp-auto
+  $CLI item create -t login -n "Slack" -e "alice@acme.test" -pA -U "https://slack.com/signin" && ok "Added Slack"
+  $CLI item create -t login -n "GitHub" -e "alice@acme.test" -pA -U "https://github.com" --totp-auto && ok "Added GitHub"
 
   logout_user
 }
@@ -117,7 +127,7 @@ create_demo_for_charlie() {
   log "[$user] Creating vault 'Banking' + items"
   $CLI vault create -n "Banking" -d "Comptes bancaires"
   select_vault_by_name "Banking"
-  $CLI item create -t login -n "CreditSuisse" -e "charlie@example.com" -pA -U "https://www.credit-suisse.com" --notes "Rest in peace, Credit Suisse..."
+  $CLI item create -t login -n "CreditSuisse" -e "charlie@example.com" -pA -U "https://www.credit-suisse.com" --notes "Rest in peace, Credit Suisse..." && ok "Added CreditSuisse"
 
   logout_user
 }
