@@ -8,15 +8,14 @@ CLI="python -m client.cli"
 
 # ---------- Helpers d'affichage ----------
 if command -v tput >/dev/null 2>&1; then
-  bold=$(tput bold); red=$(tput setaf 1); green=$(tput setaf 2)
-  yellow=$(tput setaf 3); blue=$(tput setaf 4); reset=$(tput sgr0)
+  red=$(tput setaf 1); blue=$(tput setaf 2); yellow=$(tput setaf 3); green=$(tput setaf 4); reset=$(tput sgr0)
 else
-  bold=""; red=""; green=""; yellow=""; blue=""; reset=""
+  red=""; blue=""; yellow=""; green=""; reset=""
 fi
+err()  { printf "%s[ERROR]%s %s\n" "$red" "$reset" "$*"; }
 log()  { printf "\n%s[%s]%s %s\n" "$blue" "$(date +'%H:%M:%S')" "$reset" "$*"; }
-info() { printf "%s➜%s %s\n" "$yellow" "$reset" "$*"; }
-ok()   { printf "%s✓%s %s\n" "$green" "$reset" "$*"; }
-err()  { printf "%s✗%s %s\n" "$red" "$reset" "$*"; }
+warn() { printf "%s[WARNING]%s %s\n" "$yellow" "$reset" "$*"; }
+ok()   { printf "%s[OK]%s %s\n" "$green" "$reset" "$*"; }
 
 require_login() {
   local user="$1" pass="$2"
@@ -68,7 +67,7 @@ ensure_user() {
   log "Logging in as $user"
   read -r status logged_user <<<"$(require_login "$user" "$pass")"
   if [[ "$status" != "OK" || "$logged_user" != "$user" ]]; then
-    echo "[error] unable to login as $user with provided password. Cleanup client_data and retry." >&2
+    err "unable to login as $user with provided password. Cleanup client_data and retry." >&2
     exit 1
   fi
 }
@@ -87,8 +86,8 @@ create_demo_for_alice() {
   log "[$user] Creating vault 'Work' + items"
   $CLI vault create -n "Work" -d "Accès pro"
   select_vault_by_name "Work"
-  $CLI item create -t login -n "Slack" -e "alice@acme.test" -pA -U "https://slack.com/signin" && ok "Added Slack"
-  $CLI item create -t login -n "GitHub" -e "alice@acme.test" -pA -U "https://github.com" --totp-auto && ok "Added GitHub"
+  $CLI item create -t login -n "Slack" -e "alice@acme.test" -pA -U "https://slack.com/signin"
+  $CLI item create -t login -n "GitHub" -e "alice@acme.test" -pA -U "https://github.com" --totp-auto
 
   logout_user
 }
@@ -127,8 +126,7 @@ create_demo_for_charlie() {
   log "[$user] Creating vault 'Banking' + items"
   $CLI vault create -n "Banking" -d "Comptes bancaires"
   select_vault_by_name "Banking"
-  $CLI item create -t login -n "CreditSuisse" -e "charlie@example.com" -pA -U "https://www.credit-suisse.com" --notes "Rest in peace, Credit Suisse..." && ok "Added CreditSuisse"
-
+  $CLI item create -t login -n "CreditSuisse" -e "charlie@example.com" -pA -U "https://www.credit-suisse.com" --notes "Rest in peace, Credit Suisse..."
   logout_user
 }
 

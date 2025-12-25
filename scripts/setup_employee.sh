@@ -10,17 +10,16 @@ set -euo pipefail
 CLI="python -m client.cli"
 
 # ---------- Helpers d'affichage ----------
-# Couleurs et fonctions de log (heure + symboles).
 if command -v tput >/dev/null 2>&1; then
-  bold=$(tput bold); red=$(tput setaf 1); green=$(tput setaf 2)
-  yellow=$(tput setaf 3); blue=$(tput setaf 4); reset=$(tput sgr0)
+  bold=$(tput bold); red=$(tput setaf 1); green=$(tput setaf 2); yellow=$(tput setaf 3); blue=$(tput setaf 4); reset=$(tput sgr0)
 else
   bold=""; red=""; green=""; yellow=""; blue=""; reset=""
 fi
-log()   { printf "\n%s[%s]%s %s\n" "$blue" "$(date +'%H:%M:%S')" "$reset" "$*"; }
-info()  { printf "%s➜%s %s\n" "$yellow" "$reset" "$*"; }
-ok()    { printf "%s✓%s %s\n" "$green" "$reset" "$*"; }
-err()   { printf "%s✗%s %s\n" "$red" "$reset" "$*"; }
+err()  { printf "%s[ERROR]%s %s\n" "$red" "$reset" "$*"; }
+log()  { printf "\n%s[%s]%s %s\n" "$blue" "$(date +'%H:%M:%S')" "$reset" "$*"; }
+warn() { printf "%s[WARNING]%s %s\n" "$yellow" "$reset" "$*"; }
+ok()   { printf "%s[OK]%s %s\n" "$green" "$reset" "$*"; }
+info() { printf "%s[INFO]%s %s\n" "$yellow" "$reset" "$*"; }
 
 # ---------- Utilitaires ----------
 # Enregistre un utilisateur en court-circuitant la saisie interactive du mot de passe.
@@ -132,7 +131,7 @@ if [[ "$status" != "OK" || "$logged_user" != "$username" ]]; then
   err "Unable to login as $username. If the account already exists with another password, clean client_data and retry."
   exit 1
 fi
-ok "Logged in as $username"
+#ok "Logged in as $username"
 
 log "[${username}] Creating vault 'Personnel'"
 $CLI vault create -n "Personnel" -d "Accès personnels" >/dev/null
@@ -175,4 +174,5 @@ create_tool "VPN" "https://vpn.${company_slug}.ch"
 
 # 6) Logout et résumé.
 logout_user
-log "$(printf "Done.\nUser '%s' successfully created with vaults Personnel & Business.\nTemporary password: '%s'. Please ask employee to change their password on first login." "$username" "$account_pass")"
+log "$(printf "Done.\n\nUser '%s' successfully created with vaults Personnel & Business.\nTemporary password: '%s'. Please ask employee to change their password on first login." "$username" "$account_pass")"
+printf "\n"
