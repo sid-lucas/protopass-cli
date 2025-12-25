@@ -190,11 +190,6 @@ def build_parser():
     p_item_list = item_sub.add_parser("list", help="List all items in the selected vault")
     p_item_list.set_defaults(func=item.list_items)
 
-    # ====== item totp <idx> ======
-    p_item_totp = item_sub.add_parser("totp", help="Show current TOTP code for an item")
-    p_item_totp.add_argument("index", type=int, help="Index as shown in item list")
-    p_item_totp.set_defaults(func=item.show_item_totp)
-
     # ====== item show <idx> ======
     p_item_show = item_sub.add_parser("show", help="Show item details")
     p_item_show.add_argument("index", type=int, help="Index as shown in item list")
