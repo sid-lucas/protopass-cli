@@ -208,6 +208,10 @@ __marimo__/
 
 # PERSO :
 # --- ignore local logs/data files ---
-client/logs/
-client/client_data/
-server/server_data/
+src/client/logs/
+src/client/client_data/
+src/server/server_data/
+src/server/server.log
+src/client/logs/*.log
+*.pid
+*.sock
