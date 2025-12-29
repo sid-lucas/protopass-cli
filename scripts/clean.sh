@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Reset all local ProtoPass state (client + server fixtures).
 # - removes client/client_data/account_state.json
+# - clears client/logs/*.log
 # - clears server/server_data/vaults/*
 # - deletes server/server_data/users.json and sessions.json
 # - removes local agent socket (~/.protopass/agent.sock) if present
@@ -21,6 +22,7 @@ ok()   { printf "%s[OK]%s %s\n" "$green" "$reset" "$*"; }
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 CLIENT_STATE="$ROOT_DIR/client/client_data/account_state.json"
+CLIENT_LOGS_DIR="$ROOT_DIR/client/logs"
 SERVER_DATA="$ROOT_DIR/server/server_data"
 VAULT_DIR="$SERVER_DATA/vaults"
 USERS_FILE="$SERVER_DATA/users.json"
@@ -35,6 +37,19 @@ if [[ -f "$CLIENT_STATE" ]]; then
   ok "Deleted client state: $CLIENT_STATE"
 else
   warn "Client state not found (already clean)"
+fi
+# Client logs
+if [[ -d "$CLIENT_LOGS_DIR" ]]; then
+  mapfile -t log_files < <(find "$CLIENT_LOGS_DIR" -type f -name '*.log')
+  if (( ${#log_files[@]} > 0 )); then
+    for lf in "${log_files[@]}"; do
+      : > "$lf"
+      printf "  truncated log: %s\n" "$lf"
+    done
+  fi
+  ok "Cleared client logs directory: $CLIENT_LOGS_DIR (${#log_files[@]} truncated)"
+else
+  warn "Client logs directory not found: $CLIENT_LOGS_DIR"
 fi
 
 # Server vaults
