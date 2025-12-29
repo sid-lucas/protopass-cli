@@ -32,6 +32,7 @@ Structure de account_state.json :
 }
 """
 
+APP_DIR = Path.home() / ".protopass" / "client_data"
 MAX_UNLOCK_ATTEMPTS = 3
 SESSION_VALIDITY_TTL = 2  # secondes pendant lesquelles on réutilise une vérification positive
 
@@ -62,7 +63,15 @@ class AccountState:
     _last_session_check = 0.0
 
 
-    PATH = Path(__file__).resolve().parents[1] / "client_data" / "account_state.json"
+    PATH = APP_DIR / "account_state.json"
+
+    @classmethod
+    def _ensure_storage_dir(cls):
+        cls.PATH.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(cls.PATH.parent, 0o700)
+        except Exception:
+            pass
 
     # ============================================================
     # Lecture et écriture de l'état du compte (fichier local)
@@ -109,7 +118,7 @@ class AccountState:
     @classmethod
     def save(cls, username, salt, public_key, private_key_block, session_block, pwd):
         logger = log.get_logger(CTX.ACCOUNT_STATE, username)
-        cls.PATH.parent.mkdir(parents=True, exist_ok=True)
+        cls._ensure_storage_dir()
 
         payload = {
             "username": username,
@@ -149,7 +158,7 @@ class AccountState:
 
         try:
             payload_json = json.dumps(payload_with_mac, indent=2)
-            cls.PATH.parent.mkdir(parents=True, exist_ok=True)
+            cls._ensure_storage_dir()
             fd = os.open(str(cls.PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload_json)

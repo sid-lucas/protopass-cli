@@ -1,11 +1,16 @@
 import json
 from pathlib import Path
 
-USERS_PATH = Path(__file__).resolve().parent / "server_data" / "users.json"
+APP_DIR = Path.home() / ".protopass" / "server_data"
+USERS_PATH = APP_DIR / "users.json"
 
 def _ensure_db():
     # crée data/users.json si absent
     USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        USERS_PATH.parent.chmod(0o700)
+    except Exception:
+        pass
     if not USERS_PATH.exists() or USERS_PATH.stat().st_size == 0:
         USERS_PATH.write_text("{}")
 

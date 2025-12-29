@@ -6,8 +6,10 @@ import time
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-PID_FILE = ROOT_DIR / "server" / "protopass_server.pid"
-LOG_FILE = ROOT_DIR / "server" / "server.log"
+APP_DIR = Path.home() / ".protopass"
+SERVER_DIR = APP_DIR / "server"
+PID_FILE = SERVER_DIR / "protopass_server.pid"
+LOG_FILE = SERVER_DIR / "server.log"
 
 
 def _read_pid() -> int | None:
@@ -25,6 +27,18 @@ def _is_running(pid: int) -> bool:
     except OSError:
         return False
 
+def _build_server_process():
+    """
+    Build the command/env/cwd tuple to spawn the local API server.
+    In a packaged binary, we re-use the same executable with an internal mode flag.
+    """
+    env = os.environ.copy()
+    if getattr(sys, "frozen", False):
+        env["PROTOPASS_INTERNAL_MODE"] = "server"
+        return [sys.executable], env, None
+
+    return [sys.executable, "-m", "server.app"], env, ROOT_DIR
+
 
 def start_server() -> tuple[bool, str]:
     """Launch the Flask server in background."""
@@ -33,13 +47,19 @@ def start_server() -> tuple[bool, str]:
         return False, f"Server already running (pid {existing_pid})."
 
     PID_FILE.unlink(missing_ok=True)
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SERVER_DIR.mkdir(parents=True, exist_ok=True)
+    APP_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(APP_DIR, 0o700)
+    os.chmod(SERVER_DIR, 0o700)
+
+    cmd, env, workdir = _build_server_process()
 
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as log_file:
             proc = subprocess.Popen(
-                [sys.executable, "-m", "server.app"],
-                cwd=ROOT_DIR,
+                cmd,
+                cwd=workdir,
+                env=env,
                 stdout=log_file,
                 stderr=log_file,
                 start_new_session=True,

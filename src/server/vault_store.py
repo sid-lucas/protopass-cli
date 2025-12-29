@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "server_data" / "vaults"
+APP_DIR = Path.home() / ".protopass" / "server_data"
+DB_PATH = APP_DIR / "vaults"
 
 def _vault_file_path(username_hash: str) -> Path:
     # retourne le chemin du fichier vaults/{username_hash}.json
@@ -10,6 +11,10 @@ def _vault_file_path(username_hash: str) -> Path:
 def _save_user_vaults(username_hash: str, vaults: list):
     # écrit la liste des vaults sur disque (joli format)
     DB_PATH.mkdir(parents=True, exist_ok=True)
+    try:
+        DB_PATH.chmod(0o700)
+    except Exception:
+        pass
     path = _vault_file_path(username_hash)
     path.write_text(json.dumps(vaults, indent=2))
 

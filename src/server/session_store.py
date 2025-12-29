@@ -1,10 +1,12 @@
 import json, os, time, secrets
+from pathlib import Path
 from typing import Optional
 
-SESSIONS_PATH = os.path.join(os.path.dirname(__file__), "server_data", "sessions.json")
+APP_DIR = Path.home() / ".protopass" / "server_data"
+SESSIONS_PATH = APP_DIR / "sessions.json"
 
 def _load():
-    if not os.path.exists(SESSIONS_PATH):
+    if not SESSIONS_PATH.exists():
         return {}
     try:
         with open(SESSIONS_PATH, "r", encoding="utf-8") as f:
@@ -18,7 +20,11 @@ def _load():
 
 
 def _save(data):
-    os.makedirs(os.path.dirname(SESSIONS_PATH), exist_ok=True)
+    SESSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        SESSIONS_PATH.parent.chmod(0o700)
+    except Exception:
+        pass
     with open(SESSIONS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 

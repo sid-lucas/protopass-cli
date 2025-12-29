@@ -1,4 +1,4 @@
-import base64, json, os,socket, subprocess, sys, time, uuid
+import base64, json, os, socket, subprocess, sys, time, uuid
 from pathlib import Path
 
 APP_DIR = Path.home() / ".protopass"
@@ -23,6 +23,20 @@ class AgentClient:
         except OSError:
             pass
 
+    def _build_agent_process(self):
+        """
+        Build the command/env/cwd tuple to start the agent.
+        - In a frozen/packaged binary, we re-invoke ourselves with an internal flag.
+        - In a normal environment, we fallback to python -m client.agent.protopass_agent.
+        """
+        env = os.environ.copy()
+        if getattr(sys, "frozen", False):
+            env["PROTOPASS_INTERNAL_MODE"] = "agent"
+            return [sys.executable], env, None
+
+        cmd = [sys.executable, "-m", "client.agent.protopass_agent"]
+        return cmd, env, Path(__file__).resolve().parents[2]
+
     def _ensure_agent(self, logger=None, force=False):
         """Ensure the agent socket exists, optionally bootstrapping the daemon."""
         if self.sock_path.exists() and not force:
@@ -37,13 +51,14 @@ class AgentClient:
         APP_DIR.mkdir(mode=0o700, exist_ok=True)
         os.chmod(APP_DIR, 0o700)
 
-        cmd = [sys.executable, "-m", "client.agent.protopass_agent"]
+        cmd, env, cwd = self._build_agent_process()
         try:
             subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                cwd=Path(__file__).resolve().parents[2],  # run from repository root
+                cwd=cwd,
+                env=env,
                 start_new_session=True,  # keep agent alive if parent receives SIGINT (Ctrl+C)
             )
         except Exception as exc:
