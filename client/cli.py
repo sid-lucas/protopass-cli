@@ -5,6 +5,7 @@ from .core import item
 from .core.integration import simplelogin as sl
 from .core.item_schema import Field, Type, SCHEMAS
 from .utils.agent_client import AgentClient
+from .utils import server_manager
 from .utils.logger import notify_user
 
 class WideHelpFormatter(argparse.HelpFormatter):
@@ -68,6 +69,16 @@ def _refresh_agent_ttl_if_running():
     except Exception:
         pass
 
+
+def _server_start(_args):
+    ok, msg = server_manager.start_server()
+    notify_user(msg)
+
+
+def _server_stop(_args):
+    ok, msg = server_manager.stop_server()
+    notify_user(msg)
+
 class ShellArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("formatter_class", HELP_FORMATTER)
@@ -76,7 +87,7 @@ class ShellArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         raise ValueError(message)
 
-SESSION_OPTIONAL_COMMANDS = {"login", "logout", "register", "shell"}
+SESSION_OPTIONAL_COMMANDS = {"login", "logout", "register", "shell", "server"}
 
 def dispatch_command(args, session_valid=None):
     """
@@ -115,6 +126,15 @@ def build_parser():
 
     p_shell = subparsers.add_parser("shell", help="Start interactive protopass shell")
     p_shell.set_defaults(func=start_shell)
+
+    # Gestion du serveur local
+    p_server = subparsers.add_parser("server", help="Manage local ProtoPass API server")
+    server_sub = p_server.add_subparsers(dest="server_command", parser_class=ShellArgumentParser)
+    p_server.set_defaults(func=lambda args: p_server.print_help())
+    p_server_start = server_sub.add_parser("start", help="Start the API server in background")
+    p_server_start.set_defaults(func=_server_start)
+    p_server_stop = server_sub.add_parser("stop", help="Stop the background API server")
+    p_server_stop.set_defaults(func=_server_stop)
 
     # ============================================================
     # Commandes d'authentification
