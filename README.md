@@ -37,6 +37,8 @@ Requires Python 3.11+.
   ```bash
   python3 -m venv .venv
   source .venv/bin/activate    # Windows: .venv\Scripts\activate
+  python -m pip install -U build
+  python -m build
   pip install ./dist/protopass_cli-0.1.0-py3-none-any.whl
   protopass --help
   ```
